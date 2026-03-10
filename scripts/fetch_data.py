@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import shutil
 from urllib.parse import urljoin, urlparse
 
@@ -130,6 +131,47 @@ def _is_xlsx_href(href):
     return path.lower().endswith(".xlsx")
 
 
+def _extract_xlsx_links(html: str, page_url: str) -> list[str]:
+    """
+    Extract xlsx links from HTML. Tries BeautifulSoup first, falls back to regex
+    for edge cases (e.g. links in script/JSON or malformed markup).
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    xlsx_links = []
+    seen = set()
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        if _is_xlsx_href(href) and href not in seen:
+            xlsx_links.append(href)
+            seen.add(href)
+
+    if not xlsx_links:
+        # Fallback: regex for href="...xlsx..." in case link is in odd markup
+        for m in re.finditer(r'href=["\']([^"\']*\.xlsx[^"\']*)["\']', html, re.I):
+            href = m.group(1).strip()
+            if _is_xlsx_href(href) and href not in seen:
+                xlsx_links.append(href)
+                seen.add(href)
+
+    return xlsx_links
+
+
+# Browser-like headers to avoid 403 from bot protection on michigan.gov
+# Note: Use gzip, deflate only (not br/Brotli) - requests doesn't decompress Brotli by default
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate",
+    "DNT": "1",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
 def fetch_dsmi_inventories():
     """
     Fetch DSMI Inventories file.
@@ -138,16 +180,10 @@ def fetch_dsmi_inventories():
     Raises on HTTP error or if no xlsx link found.
     """
     page_url = "https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule/dsmi-inventories"
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; DataMonitor/1.0; +https://planetdetroit.org)"}
-    page_resp = requests.get(page_url, headers=headers, timeout=30)
+    page_resp = requests.get(page_url, headers=BROWSER_HEADERS, timeout=30)
     page_resp.raise_for_status()
 
-    soup = BeautifulSoup(page_resp.text, "html.parser")
-    xlsx_links = []
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if _is_xlsx_href(href):
-            xlsx_links.append(href)
+    xlsx_links = _extract_xlsx_links(page_resp.text, page_url)
 
     if not xlsx_links:
         raise ValueError("No xlsx file link found on DSMI inventories page")
@@ -158,7 +194,7 @@ def fetch_dsmi_inventories():
         )
 
     xlsx_url = urljoin(page_url, xlsx_links[0])
-    response = requests.get(xlsx_url, timeout=30)
+    response = requests.get(xlsx_url, headers=BROWSER_HEADERS, timeout=30)
     response.raise_for_status()
     path = os.path.join(DATA_DIR, "DSMI-Service-Line-Materials-Estimates.xlsx")
     with open(path, "wb") as f:
@@ -173,16 +209,10 @@ def fetch_lead_copper_rule():
     Raises on HTTP error.
     """
     page_url = "https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule/lslr-progress"
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; DataMonitor/1.0; +https://planetdetroit.org)"}
-    page_resp = requests.get(page_url, headers=headers, timeout=30)
+    page_resp = requests.get(page_url, headers=BROWSER_HEADERS, timeout=30)
     page_resp.raise_for_status()
 
-    soup = BeautifulSoup(page_resp.text, "html.parser")
-    xlsx_links = []
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if _is_xlsx_href(href):
-            xlsx_links.append(href)
+    xlsx_links = _extract_xlsx_links(page_resp.text, page_url)
 
     if not xlsx_links:
         raise ValueError("No xlsx file link found on LSLR progress page")
@@ -193,7 +223,7 @@ def fetch_lead_copper_rule():
         )
 
     xlsx_url = urljoin(page_url, xlsx_links[0])
-    response = requests.get(xlsx_url, timeout=30)
+    response = requests.get(xlsx_url, headers=BROWSER_HEADERS, timeout=30)
     response.raise_for_status()
     path = os.path.join(DATA_DIR, "2024-2025-LSLR-Data.xlsx")
     with open(path, "wb") as f:
