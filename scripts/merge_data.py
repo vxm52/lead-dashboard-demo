@@ -3,13 +3,6 @@ Merge DSMI and LSLR data on PWSID and produce output in lead-data.csv format.
 
 Follow-up to fetch_data.py. Reads DSMI, LSLR, and socrata JSON from data/,
 merges on Public Water Supply ID (PWSID), and outputs lead-data.csv.
-
-Logic (per methodology):
-1. Merge using PWSID, keep all records (outer join).
-2. Total to identify/replace = Lead + GPCL + Unknown.
-3. Screen for incomplete inventory (blank fields preventing progress calculation).
-4. Exceedance: merged from optional lookup or preserved from existing file.
-5. % Replaced = (Lines Replaced ÷ (Total to Identify+Replace + Lines Replaced)) × 100.
 """
 
 import json
@@ -45,9 +38,10 @@ def _num(val):
 
 
 def _fmt_num(val):
-    """Format as comma-separated int; empty for 0/blank."""
-    n = _num(val)
-    return "" if n == 0 else f"{n:,}"
+    val = _num(val)
+    if val == 0:
+        return ""
+    return str(int(val))
 
 
 def load_dsmi(path: str) -> pd.DataFrame:
@@ -105,46 +99,12 @@ def merge_sources(dsmi: pd.DataFrame, lslr: pd.DataFrame, socrata: pd.DataFrame)
     return merged
 
 
-def _inventory_complete(row) -> bool:
-    """True if we can compute Total To Replace = Lead + GPCL + Unknown."""
-    lead, gpcl, unknown = row.get("Lead Lines"), row.get("GPCL"), row.get("Unknown")
-    has_any = any(not pd.isna(v) and str(v).strip() not in ("", "-") for v in (lead, gpcl, unknown))
-    if has_any:
-        return True
-    # All blank: complete if Non-Lead == Total Lines (no lead)
-    nl, tl = _num(row.get("Non-Lead")), _num(row.get("Total Lines"))
-    return tl > 0 and nl == tl
-
-
-def _pct_replaced(replaced: int, to_replace: int) -> str:
+def _pct_replaced(replaced: int, to_replace: int) -> int | None:
     denom = to_replace + replaced
     if denom == 0:
-        return ""  # Match lead-data.csv: empty when both 0
-    pct = min(100, max(0, (replaced / denom) * 100))
-    return f"{int(round(pct))}%"
-
-
-def _status(row_data: dict) -> tuple[str, str]:
-    inv_complete = row_data["inventory_complete"]
-    to_replace = row_data["total_to_replace"]
-    replaced = row_data["total_replaced"]
-    y21, y22, y23, y24 = row_data["y2021"], row_data["y2022"], row_data["y2023"], row_data["y2024"]
-
-    if not inv_complete:
-        return "Inventory not received or data not complete", "Inventory not received or incomplete"
-    if to_replace == 0:
-        if replaced > 0:
-            return "100% replaced", "100% replaced"
-        return " Inventory completed, no lead lines identified ", "No lead lines"
-    if replaced >= to_replace:
-        return "100% replaced", "100% replaced"
-
-    avg = (y21 + y22 + y23 + y24) / 4
-    pct_annual = (avg / to_replace) * 100 if to_replace else 0
-    pct_replaced = (replaced / (to_replace + replaced)) * 100 if (to_replace + replaced) else 0
-    if pct_annual >= 20 or pct_replaced >= 20:
-        return "Compliant (≥20% average replacement, 2021–2024)", "Compliant"
-    return " Not Compliant (<20% average replacement, 2021–2024) ", "Not compliant"
+        return None
+    pct = (replaced / denom) * 100
+    return int(round(pct))
 
 
 def build_output(merged: pd.DataFrame) -> pd.DataFrame:
@@ -155,54 +115,63 @@ def build_output(merged: pd.DataFrame) -> pd.DataFrame:
         if not pwsid:
             continue
 
-        supply_name = (
-            row.get("Supply Name_x") or row.get("Supply Name_y") or row.get("Supply Name") or ""
-        )
-        if pd.isna(supply_name):
-            supply_name = ""
-        supply_name = str(supply_name).strip()
+        supply_name = row.get("Supply Name", "").strip()
+        population = _num(row.get("Population"))
 
-        lead, gpcl, unknown = row.get("Lead Lines"), row.get("GPCL"), row.get("Unknown")
-        inv_complete = _inventory_complete(row)
-        total_to_replace = (
-            _num(lead) + _num(gpcl) + _num(unknown) if inv_complete else 0
-        )
+        lead, gpcl, nonlead, unknown = row.get("Lead Lines"), row.get("GPCL"), row.get("Non-Lead"), row.get("Unknown")
+        total = row.get("Total Lines")
+
+        total_to_replace = _num(lead) + _num(gpcl) + _num(unknown)
+        total_replaced = _num(row.get("Total Replaced"))
+        percent_replaced = _pct_replaced(total_replaced, total_to_replace)
+
+        if population == 0:
+            status = "No service lines; wholesale only"
+            status_expl = "No service lines; wholesale only"
+        elif pd.isna(total):
+            status = "Inventory not received or incomplete"
+            status_expl = "Inventory not received or incomplete"
+        else:
+            if nonlead == total:
+                if total_replaced > 0:
+                    status = "100% replaced"
+                    status_expl = "100% replaced"
+                else:
+                    status = "No lead lines"
+                    status_expl = "Inventory completed, no lead lines identified"
+            else:
+                if percent_replaced is not None:
+                    if percent_replaced < 20:
+                        status = "Not compliant"
+                        status_expl = "Not Compliant (<20% average replacement, 2021–2024)"
+                    else:
+                        status = "Compliant"
+                        status_expl = "Compliant (≥20% average replacement, 2021–2024)"
+                else:
+                    status = "Inventory not received or incomplete"
+                    status_expl = "Inventory not received or incomplete"
 
         y21 = _num(row.get("2021"))
         y22 = _num(row.get("2022"))
         y23 = _num(row.get("2023"))
         y24 = _num(row.get("2024"))
-        total_replaced = _num(row.get("Total Replaced"))
-        if total_replaced == 0 and (y21 or y22 or y23 or y24):
-            total_replaced = y21 + y22 + y23 + y24
-
-        pct_str = _pct_replaced(total_replaced, total_to_replace)
-        status_expl, status = _status({
-            "inventory_complete": inv_complete,
-            "total_to_replace": total_to_replace,
-            "total_replaced": total_replaced,
-            "y2021": y21, "y2022": y22, "y2023": y23, "y2024": y24,
-        })
-
-        pop = row.get("Population")
-        pop_str = "" if pd.isna(pop) or pop is None else f"{_num(pop):,}"
 
         rows.append({
             "PWSID": pwsid,
             "Supply Name": supply_name,
-            "Population": pop_str,
-            "2021": "" if y21 == 0 else str(int(y21)),
-            "2022": "" if y22 == 0 else str(int(y22)),
-            "2023": "" if y23 == 0 else str(int(y23)),
-            "2024": "" if y24 == 0 else str(int(y24)),
-            "Total Replaced": "" if total_replaced == 0 else str(int(total_replaced)),
-            "Lead Lines": "" if _num(lead) == 0 else _fmt_num(lead),
-            "GPCL": "" if _num(gpcl) == 0 else _fmt_num(gpcl),
-            "Unknown": "" if _num(unknown) == 0 else _fmt_num(unknown),
-            "Total To Replace": "" if not inv_complete or total_to_replace == 0 else _fmt_num(total_to_replace),
-            "Percent Replaced": pct_str,
-            "Non-Lead": _fmt_num(row.get("Non-Lead")),
-            "Total Lines": _fmt_num(row.get("Total Lines")),
+            "Population": "" if population == 0 else str(int(population)),
+            "2021": _fmt_num(y21),
+            "2022": _fmt_num(y22),
+            "2023": _fmt_num(y23),
+            "2024": _fmt_num(y24),
+            "Total Replaced": _fmt_num(total_replaced),
+            "Lead Lines": _fmt_num(lead),
+            "GPCL": _fmt_num(gpcl),
+            "Unknown": _fmt_num(unknown),
+            "Total To Replace": _fmt_num(total_to_replace),
+            "Percent Replaced": f"{percent_replaced}%" if percent_replaced else "",
+            "Non-Lead": _fmt_num(nonlead),
+            "Total Lines": _fmt_num(total),
             "Exceedance": "",
             "Latitude": "",
             "Longitude": "",
@@ -231,6 +200,7 @@ def main():
     socrata = load_socrata(socrata_path)
 
     merged = merge_sources(dsmi, lslr, socrata)
+    merged.to_csv("merged.csv", index=False)
     out_df = build_output(merged).sort_values("PWSID").reset_index(drop=True)
     out_df.to_csv(output_path, index=False)
     print(f"Done. Output: {output_path}")
