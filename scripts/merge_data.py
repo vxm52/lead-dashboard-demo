@@ -11,10 +11,12 @@ import os
 import pandas as pd
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+CWB_DIR = os.path.join(os.path.dirname(__file__), "..", "cwb")
 
 DSMI_FILE = "DSMI-Service-Line-Materials-Estimates.xlsx"
 LSLR_FILE = "2024-2025-LSLR-Data.xlsx"
 SOCRATA_FILE = "socrata-90th-percentile.json"
+CENTROID_FILE = "mi_cwb_centroids.geojson"
 OUTPUT_CSV = "lead-data-test.csv"
 
 HEADER_ROW = 2
@@ -93,9 +95,25 @@ def load_socrata(path: str) -> pd.DataFrame:
     return df.drop_duplicates(subset=["Public Water Supply ID"], keep="first")
 
 
-def merge_sources(dsmi: pd.DataFrame, lslr: pd.DataFrame, socrata: pd.DataFrame) -> pd.DataFrame:
+def load_mi_cwb_centroids(path: str) -> pd.DataFrame:
+    with open(path) as f:
+        data = json.load(f)
+
+    rows = []
+    for feature in data["features"]:
+        props = feature["properties"]
+        rows.append({
+            "Public Water Supply ID": props["PWSID"],
+            "lat": props["lat"],
+            "lon": props["lon"]
+        })
+    return pd.DataFrame(rows)
+
+
+def merge_sources(dsmi: pd.DataFrame, lslr: pd.DataFrame, socrata: pd.DataFrame, cwb_centroids: pd.DataFrame) -> pd.DataFrame:
     merged = dsmi.merge(lslr, on="Public Water Supply ID", how="outer")
     merged = merged.merge(socrata, on="Public Water Supply ID", how="left")
+    merged = merged.merge(cwb_centroids, on="Public Water Supply ID", how="left")
     return merged
 
 
@@ -173,8 +191,8 @@ def build_output(merged: pd.DataFrame) -> pd.DataFrame:
             "Non-Lead": _fmt_num(nonlead),
             "Total Lines": _fmt_num(total),
             "Exceedance": "",
-            "Latitude": "",
-            "Longitude": "",
+            "Latitude": row.get("lat"),
+            "Longitude": row.get("lon"),
             "EPA_Link": f"https://echo.epa.gov/detailed-facility-report?fid={pwsid}&sys=SDWIS",
             "Status Explanation": status_expl,
             "Status": status,
@@ -186,6 +204,7 @@ def main():
     dsmi_path = os.path.join(DATA_DIR, DSMI_FILE)
     lslr_path = os.path.join(DATA_DIR, LSLR_FILE)
     socrata_path = os.path.join(DATA_DIR, SOCRATA_FILE)
+    centroid_path = os.path.join(CWB_DIR, CENTROID_FILE)
     output_path = os.path.join(DATA_DIR, OUTPUT_CSV)
 
     if not os.path.exists(dsmi_path):
@@ -198,9 +217,9 @@ def main():
     dsmi = load_dsmi(dsmi_path)
     lslr = load_lslr(lslr_path)
     socrata = load_socrata(socrata_path)
+    cwb_centroids = load_mi_cwb_centroids(centroid_path)
 
-    merged = merge_sources(dsmi, lslr, socrata)
-    merged.to_csv("merged.csv", index=False)
+    merged = merge_sources(dsmi, lslr, socrata, cwb_centroids)
     out_df = build_output(merged).sort_values("PWSID").reset_index(drop=True)
     out_df.to_csv(output_path, index=False)
     print(f"Done. Output: {output_path}")
