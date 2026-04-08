@@ -101,8 +101,11 @@ jobs:
               Returns dict with status info.
               """
               try:
+                  # Use realistic browser headers — michigan.gov blocks bot-like User-Agents
                   headers = {
-                      'User-Agent': 'Mozilla/5.0 (compatible; DataMonitor/1.0; +https://planetdetroit.org)'
+                      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                      'Accept-Language': 'en-US,en;q=0.5',
                   }
                   resp = requests.get(url, headers=headers, timeout=30)
                   resp.raise_for_status()
@@ -152,7 +155,7 @@ jobs:
               if api_result['success']:
                   print(f"  ✓ Record count: {api_result['record_count']}")
                   print(f"  ✓ Content hash: {api_result['content_hash'][:12]}...")
-                  
+
                   prev_api = prev_state.get('socrata_api', {})
                   if prev_api.get('record_count') and prev_api['record_count'] != api_result['record_count']:
                       changes.append({
@@ -170,17 +173,26 @@ jobs:
                       })
               else:
                   print(f"  ✗ Error: {api_result.get('error')}")
+                  # Alert if a previously working source starts failing
+                  prev_api = prev_state.get('socrata_api', {})
+                  if prev_api.get('success'):
+                      changes.append({
+                          'source': '90th Percentile API (Socrata)',
+                          'type': 'Source now failing',
+                          'details': f"Was working, now returning error: {api_result.get('error')}",
+                          'url': 'https://data.michigan.gov/dataset/Public-Water-Supply-90th-Percentiles/39ya-9txc'
+                      })
               
               # 2. Check DSMI Inventories page
               print("\n[2/3] Checking EGLE DSMI Inventories page...")
-              dsmi_url = "https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule/dsmi-inventories"
+              dsmi_url = "https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule/dsmi/dsmi-inventories"
               dsmi_result = check_webpage(dsmi_url, "DSMI Inventories")
               current_state['dsmi_page'] = dsmi_result
               
               if dsmi_result['success']:
                   print(f"  ✓ Content hash: {dsmi_result['content_hash'][:12]}...")
                   print(f"  ✓ Data file links found: {dsmi_result['data_links_count']}")
-                  
+
                   prev_dsmi = prev_state.get('dsmi_page', {})
                   if prev_dsmi.get('content_hash') and prev_dsmi['content_hash'] != dsmi_result['content_hash']:
                       changes.append({
@@ -191,6 +203,14 @@ jobs:
                       })
               else:
                   print(f"  ✗ Error: {dsmi_result.get('error')}")
+                  prev_dsmi = prev_state.get('dsmi_page', {})
+                  if prev_dsmi.get('success'):
+                      changes.append({
+                          'source': 'EGLE DSMI Inventories Page',
+                          'type': 'Source now failing',
+                          'details': f"Was working, now returning error: {dsmi_result.get('error')}",
+                          'url': dsmi_url
+                      })
               
               # 3. Check Lead & Copper Rule page
               print("\n[3/3] Checking EGLE Lead & Copper Rule page...")
@@ -201,7 +221,7 @@ jobs:
               if lcr_result['success']:
                   print(f"  ✓ Content hash: {lcr_result['content_hash'][:12]}...")
                   print(f"  ✓ Data file links found: {lcr_result['data_links_count']}")
-                  
+
                   prev_lcr = prev_state.get('lcr_page', {})
                   if prev_lcr.get('content_hash') and prev_lcr['content_hash'] != lcr_result['content_hash']:
                       changes.append({
@@ -212,6 +232,14 @@ jobs:
                       })
               else:
                   print(f"  ✗ Error: {lcr_result.get('error')}")
+                  prev_lcr = prev_state.get('lcr_page', {})
+                  if prev_lcr.get('success'):
+                      changes.append({
+                          'source': 'EGLE Lead & Copper Rule Page',
+                          'type': 'Source now failing',
+                          'details': f"Was working, now returning error: {lcr_result.get('error')}",
+                          'url': lcr_url
+                      })
               
               # Save current state
               current_state['last_check'] = datetime.now().isoformat()
