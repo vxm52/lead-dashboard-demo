@@ -366,7 +366,7 @@ function Legend() {
             ))}
             {/* Exceedance indicator — separate from status colors */}
             <div className="legend-item">
-              <span className="legend-swatch legend-swatch--exc">⚠</span>
+              <span className="legend-swatch legend-swatch--exc">⚠️️</span>
               <div className="legend-text">
                 <strong>Lead Action Level Exceedance</strong>
                 <span>Exceeded Michigan lead action level (most recent year shown)</span>
@@ -534,7 +534,7 @@ function ExpandedDetail({ system }) {
         )}
         {exceedance && (
           <span className="expand-badge expand-badge--exc">
-            ⚠ LCR Exceedance {formatExceedance(system.exceedance)}
+            ⚠️️ LCR Exceedance {formatExceedance(system.exceedance)}
           </span>
         )}
         {system.epaLink && (
@@ -852,7 +852,7 @@ function WaterSystemDirectory({ data = waterSystemsData }) {
                       </td>
                       <td className="col-exc">
                         {exceedance
-                          ? <span className="exc-text">⚠ LCR {formatExceedance(system.exceedance)}</span>
+                          ? <span className="exc-text">⚠️️ LCR {formatExceedance(system.exceedance)}</span>
                           : <span className="dir-dash">—</span>
                         }
                       </td>
