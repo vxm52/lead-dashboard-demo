@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import './Dashboard.css';
 import ReplacementTrendChart from './ReplacementTrendChart';
+import LeadLevelTrendChart from './LeadLevelTrendChart';
 
 
 function Dashboard() {
@@ -123,6 +124,8 @@ function Dashboard() {
               <strong>315,372 lines of unknown material</strong> still need testing
             </div>
           </div>
+
+          <LeadLevelTrendChart />
         </div>
         
         <div className="footer">
