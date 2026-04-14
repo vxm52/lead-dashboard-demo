@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import './Dashboard.css';
+import ReplacementTrendChart from './ReplacementTrendChart';
+
 
 function Dashboard() {
   const [animatedProgress, setAnimatedProgress] = useState(0);
@@ -82,31 +84,7 @@ function Dashboard() {
         </div>
         
         <div className="charts-grid">
-          <div className="chart-card">
-            <h3>Annual Replacement Trend</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={yearlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="year" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px' }}
-                  formatter={(value) => [value.toLocaleString() + ' lines', 'Replaced']}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="replacements" 
-                  stroke="#3b82f6" 
-                  strokeWidth={3}
-                  dot={{ fill: '#3b82f6', r: 6 }}
-                  activeDot={{ r: 8 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-            <div className="insight-box green">
-              <strong>138% increase</strong> from 2021 to 2024 – progress is accelerating!
-            </div>
-          </div>
+          <ReplacementTrendChart />
           
           <div className="chart-card">
             <h3>Service Line Composition</h3>
