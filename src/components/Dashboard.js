@@ -3,6 +3,7 @@ import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tool
 import './Dashboard.css';
 import ReplacementTrendChart from './ReplacementTrendChart';
 import LeadLevelTrendChart from './LeadLevelTrendChart';
+import ComplianceStatusChart from './ComplianceStatusChart';
 
 
 function Dashboard() {
@@ -126,6 +127,8 @@ function Dashboard() {
           </div>
 
           <LeadLevelTrendChart />
+
+          <ComplianceStatusChart />
         </div>
         
         <div className="footer">
