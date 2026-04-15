@@ -54,6 +54,23 @@ const STATUS_CONFIG = {
  * Controls the background tint and left border accent on each row.
  * Defined in WaterSystemDirectory.css under "Row status colors".
  */
+/**
+ * Maps data status values to the display labels shown in the UI.
+ * The data uses short keys like 'Compliant'/'Not compliant' internally;
+ * these labels match the original dashboard wording shown to users.
+ */
+const STATUS_DISPLAY_LABEL = {
+  'Not compliant':                        '<20% average replacement, 2021–2024',
+  'Compliant':                            '≥20% average replacement, 2021–2024',
+  '100% replaced':                        '100% replaced',
+  'No lead lines':                        'No lead lines',
+  'Inventory not received or incomplete': 'Inventory not received or incomplete',
+  'No service lines; wholesale only':     'No service lines; wholesale only',
+};
+
+/** Returns the user-facing display label for a status value. */
+const getStatusLabel = (status) => STATUS_DISPLAY_LABEL[status] || status;
+
 const STATUS_ROW_CLASS = {
   'Not compliant':                        'dir-row--noncompliant',
   'Compliant':                            'dir-row--compliant',
@@ -76,14 +93,14 @@ const LEGEND_ITEMS = [
   },
   {
     badgeClass:  'badge-noncompliant',
-    label:       'Not compliant',
-    description: '<20% average replacement, 2021–2024',
+    label:       '<20% average replacement, 2021–2024',
+    description: 'Not meeting state replacement requirements',
     colorStyle:  { background: '#dc2626' },
   },
   {
     badgeClass:  'badge-compliant',
-    label:       'Compliant',
-    description: '>=20% average replacement, 2021-2024',
+    label:       '≥20% average replacement, 2021–2024',
+    description: 'Meeting state replacement requirements',
     colorStyle:  { background: '#16a34a' },
   },
   {
@@ -126,6 +143,8 @@ const getStatusConfig = (status) =>
 
 /** Returns the row CSS modifier class for a given status string. */
 const getRowClass = (status) => STATUS_ROW_CLASS[status] || '';
+
+
 
 /**
  * Returns true if the system has a recorded lead action level exceedance.
@@ -230,12 +249,12 @@ function buildNarrative(system) {
       };
     case 'Compliant':
       return {
-        text: `${name} serves ${pop} residents and has replaced ${pct}% of its service lines, meeting the >=${COMPLIANCE_THRESHOLD}% compliance threshold.${excSuffix}`,
+        text: `${name} serves ${pop} residents and has replaced ${pct}% of its service lines, meeting the ≥${COMPLIANCE_THRESHOLD}% replacement requirement.${excSuffix}`,
         tone: 'good',
       };
     case 'Not compliant':
       return {
-        text: `${name} serves ${pop} residents and has replaced ${pct}% of its service lines — below the ${COMPLIANCE_THRESHOLD}% compliance threshold.${excSuffix}`,
+        text: `${name} serves ${pop} residents and has replaced ${pct}% of its service lines — below the ${COMPLIANCE_THRESHOLD}% replacement requirement.${excSuffix}`,
         tone: 'bad',
       };
     default:
@@ -256,7 +275,11 @@ function buildNarrative(system) {
  */
 function StatusBadge({ status }) {
   const { badgeClass } = getStatusConfig(status);
-  return <span className={`status-badge ${badgeClass}`}>{status}</span>;
+  return (
+    <span className={`status-badge ${badgeClass}`}>
+      {getStatusLabel(status)}
+    </span>
+  );
 }
 
 /**
@@ -366,7 +389,7 @@ function Legend() {
             ))}
             {/* Exceedance indicator — separate from status colors */}
             <div className="legend-item">
-              <span className="legend-swatch legend-swatch--exc">⚠️️</span>
+              <span className="legend-swatch legend-swatch--exc">⚠️</span>
               <div className="legend-text">
                 <strong>Lead Action Level Exceedance</strong>
                 <span>Exceeded Michigan lead action level (most recent year shown)</span>
@@ -534,7 +557,7 @@ function ExpandedDetail({ system }) {
         )}
         {exceedance && (
           <span className="expand-badge expand-badge--exc">
-            ⚠️️ LCR Exceedance {formatExceedance(system.exceedance)}
+            ⚠️ LCR Exceedance {formatExceedance(system.exceedance)}
           </span>
         )}
         {system.epaLink && (
@@ -746,13 +769,13 @@ function WaterSystemDirectory({ data = waterSystemsData }) {
 
           <label className="dir-checkbox-label">
             <input type="checkbox" checked={filterExceedances} onChange={handleExceedancesFilter} />
-            <span>Show only systems with lead action level exceedances</span>
+            <span>Exceedances only</span>
           </label>
 
           {/* Available for data quality review — shows systems without map pins */}
           <label className="dir-checkbox-label">
             <input type="checkbox" checked={filterNoLocation} onChange={handleNoLocationFilter} />
-            <span>Show only systems without map location</span>
+            <span>No map location</span>
           </label>
 
           {/* Rows-per-page selector, pushed to the far right */}
@@ -852,7 +875,7 @@ function WaterSystemDirectory({ data = waterSystemsData }) {
                       </td>
                       <td className="col-exc">
                         {exceedance
-                          ? <span className="exc-text">⚠️️ LCR {formatExceedance(system.exceedance)}</span>
+                          ? <span className="exc-text">⚠️ LCR {formatExceedance(system.exceedance)}</span>
                           : <span className="dir-dash">—</span>
                         }
                       </td>

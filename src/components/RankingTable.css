@@ -258,7 +258,7 @@
 
 .ranking-table th.number-col { text-align: right; }
 .ranking-table th.rank-col   { text-align: center; width: 70px; }
-.ranking-table th.status-col { text-align: left; min-width: 180px; }
+.ranking-table th.status-col { text-align: left; min-width: 220px; }
 
 /* Active sort indicator (blue) vs inactive (gray) */
 .sort-indicator             { font-size: 0.75rem; margin-left: 3px; color: #2563eb; }
@@ -384,9 +384,12 @@
 }
 
 .status-text {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: #475569;
-  white-space: nowrap;
+  /* Allow long labels to wrap rather than overflow */
+  white-space: normal;
+  word-break: break-word;
+  max-width: 200px;
 }
 
 /* =============================================================================

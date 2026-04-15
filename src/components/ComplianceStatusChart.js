@@ -43,9 +43,9 @@ import waterSystemsData from '../data/waterSystemsData';
  * if either file is updated.
  */
 const STATUS_DISPLAY = [
-  { status: 'Not compliant',                        label: 'Not compliant',             color: '#dc2626' },
+  { status: 'Not compliant',                        label: '<20% avg replacement',       color: '#dc2626' },
   { status: 'Inventory not received or incomplete', label: 'Inventory incomplete',       color: '#7c3aed' },
-  { status: 'Compliant',                            label: 'Compliant',                 color: '#16a34a' },
+  { status: 'Compliant',                            label: '>=20% avg replacement',      color: '#16a34a' },
   { status: '100% replaced',                        label: '100% replaced',             color: '#059669' },
   { status: 'No lead lines',                        label: 'No lead lines',             color: '#2563eb' },
   { status: 'No service lines; wholesale only',     label: 'Wholesale only',            color: '#6b7280' },
@@ -229,12 +229,12 @@ function ComplianceStatusChart({ data = waterSystemsData }) {
         {metric === 'systems' ? (
           <>
             <strong>{urgentPct}% of systems</strong> ({urgentCount.toLocaleString()}) are
-            either non-compliant or have incomplete inventories and require attention.
+            below the 20% replacement requirement or have incomplete inventories.
           </>
         ) : (
           <>
             <strong>{urgentPct}% of the population served</strong> ({urgentCount.toLocaleString()} residents)
-            are supplied by systems that are either non-compliant or have incomplete inventories.
+            are supplied by systems below the 20% replacement requirement or with incomplete inventories.
           </>
         )}
       </div>

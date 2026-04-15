@@ -51,13 +51,30 @@ const STATUS_CONFIG = {
 };
 
 /**
+ * Maps data status values to the display labels shown in the UI.
+ * Keeps the data keys ('Compliant', 'Not compliant') separate from
+ * what users see, matching the original dashboard wording.
+ */
+const STATUS_DISPLAY_LABEL = {
+  'Not compliant':                        '<20% average replacement, 2021–2024',
+  'Compliant':                            '≥20% average replacement, 2021–2024',
+  '100% replaced':                        '100% replaced',
+  'No lead lines':                        'No lead lines',
+  'Inventory not received or incomplete': 'Inventory not received or incomplete',
+  'No service lines; wholesale only':     'No service lines; wholesale only',
+};
+
+/** Returns the user-facing display label for a status value. */
+const getStatusLabel = (status) => STATUS_DISPLAY_LABEL[status] || status;
+
+/**
  * Legend items shown in the collapsible legend panel.
  * Order matches STATUS_CONFIG order field (most actionable first).
  */
 const LEGEND_ITEMS = [
   { color: '#7c3aed', label: 'Inventory not received or incomplete', description: 'No complete inventory filed' },
-  { color: '#dc2626', label: 'Not compliant',                        description: '<20% average replacement, 2021–2024' },
-  { color: '#16a34a', label: 'Compliant',                            description: '≥20% average replacement, 2021–2024' },
+  { color: '#dc2626', label: '<20% average replacement, 2021–2024',  description: 'Not meeting state replacement requirements' },
+  { color: '#16a34a', label: '≥20% average replacement, 2021–2024',  description: 'Meeting state replacement requirements' },
   { color: '#059669', label: '100% replaced',                        description: 'All identified lead lines replaced' },
   { color: '#2563eb', label: 'No lead lines',                        description: 'Inventory completed, no lead lines identified' },
 ];
@@ -380,7 +397,7 @@ function RankingTable({ data = waterSystemsData }) {
         <span className="filter-explanation">
           {viewMode === 'most-lead'      && 'Systems with identified lead service lines.'}
           {viewMode === 'most-unknown'   && 'Systems with service lines of unknown material still needing identification.'}
-          {viewMode === 'best-progress'  && 'Systems actively replacing lead lines (Compliant, Not Compliant, or 100% Replaced).'}
+          {viewMode === 'best-progress'  && 'Systems actively replacing lead lines (≥20% replaced, <20% replaced, or 100% Replaced).'}
           {viewMode === 'worst-progress' && 'Non-compliant systems (<20% replacement), sorted by lowest progress first.'}
         </span>
       </div>
@@ -464,7 +481,7 @@ function RankingTable({ data = waterSystemsData }) {
                   <td className="status-col">
                     <div className="status-cell">
                       <span className="status-dot" style={{ backgroundColor: statusStyle.color }} />
-                      <span className="status-text">{system.status}</span>
+                      <span className="status-text">{getStatusLabel(system.status)}</span>
                     </div>
                   </td>
 
