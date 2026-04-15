@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import './Dashboard.css';
 import ReplacementTrendChart from './ReplacementTrendChart';
 import LeadLevelTrendChart from './LeadLevelTrendChart';
