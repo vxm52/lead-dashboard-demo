@@ -36,7 +36,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import mockMergedData from '../data/mockMergedData';
+import mergedData from '../data/mergedData';
 
 // Years covered by LSLR data — update this array when new years are added
 const LSLR_YEARS = [2021, 2022, 2023, 2024];
@@ -123,7 +123,7 @@ function CustomTooltip({ active, payload, label }) {
  * Designed to drop into Dashboard.js in place of the existing
  * "Annual Replacement Trend" chart-card div.
  */
-function ReplacementTrendChart({ data = mockMergedData }) {
+function ReplacementTrendChart({ data = mergedData }) {
   const [selectedCounty, setSelectedCounty] = useState('all');
 
   // Derive sorted county list from the dataset for the filter dropdown

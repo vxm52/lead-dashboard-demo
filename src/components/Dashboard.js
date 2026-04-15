@@ -14,12 +14,13 @@ function Dashboard() {
   const totalReplaced = 69891;
   const actualProgress = 12.0;
   
-  const yearlyData = [
-    { year: '2021', replacements: 10316 },
-    { year: '2022', replacements: 16379 },
-    { year: '2023', replacements: 18675 },
-    { year: '2024', replacements: 24521 }
-  ];
+  // Not used anymore
+  // const yearlyData = [
+  //   { year: '2021', replacements: 10316 },
+  //   { year: '2022', replacements: 16379 },
+  //   { year: '2023', replacements: 18675 },
+  //   { year: '2024', replacements: 24521 }
+  // ];
   
   const compositionData = [
     { name: 'Known Lead Lines', value: 203050, color: '#dc2626' },
