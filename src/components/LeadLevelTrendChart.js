@@ -190,12 +190,12 @@ function LeadLevelTrendChart({ data = mockMergedData }) {
   // Build the list of selectable systems from the dataset
   const availableSystems = useMemo(() => getSystemsWithMonitoringData(data), [data]);
 
-  // Default to the first available system
+  // Default to Alpena City system
   const [selectedPwsid, setSelectedPwsid] = useState(
   () => availableSystems.find((s) => s.display_name === 'Alpena City')?.resolved_pwsid
     ?? availableSystems[0]?.resolved_pwsid
     ?? null
-  );
+);
 
   // Get the time series for the selected system
   const chartData = useMemo(
@@ -284,7 +284,7 @@ function LeadLevelTrendChart({ data = mockMergedData }) {
         <>
           {/* Line chart */}
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+            <LineChart data={chartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="year" stroke="#64748b" tick={{ fontSize: 13 }} />
               <YAxis

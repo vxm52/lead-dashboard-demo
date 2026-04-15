@@ -36,9 +36,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-// When final merged CSV becomes available, swap this mockMergedData with mergedData
 import mockMergedData from '../data/mockMergedData';
-
 
 // Years covered by LSLR data — update this array when new years are added
 const LSLR_YEARS = [2021, 2022, 2023, 2024];
@@ -186,7 +184,7 @@ function ReplacementTrendChart({ data = mockMergedData }) {
 
       {/* Line chart */}
       <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+        <LineChart data={chartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="year" stroke="#64748b" tick={{ fontSize: 13 }} />
           <YAxis

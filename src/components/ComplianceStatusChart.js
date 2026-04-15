@@ -193,7 +193,7 @@ function ComplianceStatusChart({ data = waterSystemsData }) {
         <BarChart
           data={chartData}
           layout="vertical"
-          margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
+          margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
           barSize={22}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
