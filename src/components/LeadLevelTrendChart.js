@@ -27,8 +27,9 @@
  *   - When a system has multiple monitoring rows in the same year
  *     (different monitoring_end_date values), the row with the most
  *     recent monitoring_end_date is used.
- *   - The 15 ppb action level reference line is always visible, even
- *     when all values are below it, so the scale is never misleading.
+ *   - Two reference lines are shown: 12 ppb (current 2025 standard, red)
+ *     and 15 ppb (pre-2025 standard, orange). Both are always visible
+ *     so the scale is never misleading.
  *   - All data points are connected since the x-axis only contains years
  *     with actual data — no null gaps needed.
  */
@@ -46,8 +47,16 @@ import {
 } from 'recharts';
 import mergedData from '../data/mergedData';
 
-// Michigan's lead action level in ppb (15 ppb per Lead and Copper Rule revision)
-const ACTION_LEVEL_PPB = 15;
+// Michigan's original lead action level (15 ppb, Lead and Copper Rule revision)
+const ACTION_LEVEL_OLD_PPB = 15;
+
+// Michigan's current lead action level (12 ppb, established 2025)
+// This is the more important threshold — shown in deep red
+const ACTION_LEVEL_NEW_PPB = 12;
+
+// Reference line and dot colors — clearly distinct from each other and from the blue data line
+const COLOR_OLD_STANDARD = '#b91c1c'; // deep crimson — 15 ppb pre-2025 standard
+const COLOR_NEW_STANDARD = '#f97316'; // bright orange — 12 ppb current 2025 standard (more strict)
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -132,8 +141,10 @@ function getSystemTimeSeries(data, resolvedPwsid) {
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
 
-  const ppb        = payload[0]?.value;
-  const aboveLimit = ppb != null && ppb >= ACTION_LEVEL_PPB;
+  const ppb          = payload[0]?.value;
+  const aboveNew     = ppb != null && ppb >= ACTION_LEVEL_NEW_PPB;
+  const aboveOld     = ppb != null && ppb >= ACTION_LEVEL_OLD_PPB;
+  const dotColor     = aboveOld ? COLOR_OLD_STANDARD : aboveNew ? COLOR_NEW_STANDARD : '#3b82f6';
 
   return (
     <div style={{
@@ -142,17 +153,22 @@ function CustomTooltip({ active, payload, label }) {
       borderRadius: '6px',
       padding:      '10px 14px',
       fontSize:     '0.85rem',
-      minWidth:     '160px',
+      minWidth:     '180px',
     }}>
       <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#1f2937' }}>{label}</p>
       {ppb != null ? (
         <>
-          <p style={{ margin: '0 0 2px', color: aboveLimit ? '#dc2626' : '#3b82f6' }}>
+          <p style={{ margin: '0 0 4px', color: dotColor }}>
             {ppb.toFixed(1)} ppb (90th percentile)
           </p>
-          {aboveLimit && (
-            <p style={{ margin: 0, fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
-              ⚠ Above {ACTION_LEVEL_PPB} ppb action level
+          {aboveOld && (
+            <p style={{ margin: '0 0 2px', fontSize: '0.75rem', color: COLOR_OLD_STANDARD, fontWeight: 600 }}>
+              ⚠ Above {ACTION_LEVEL_OLD_PPB} ppb (pre-2025 standard)
+            </p>
+          )}
+          {aboveNew && !aboveOld && (
+            <p style={{ margin: '0 0 2px', fontSize: '0.75rem', color: '#d97706', fontWeight: 600 }}>
+              ⚠ Above {ACTION_LEVEL_NEW_PPB} ppb (current 2025 standard)
             </p>
           )}
         </>
@@ -175,13 +191,21 @@ function CustomTooltip({ active, payload, label }) {
 function CustomDot({ cx, cy, payload }) {
   if (payload.ppb == null) return null;
 
-  const isAbove = payload.aboveActionLevel;
+  // Three color tiers matching the two reference lines:
+  //   red   — above 15 ppb (pre-2025 standard)
+  //   orange — above 12 ppb but below 15 ppb (current 2025 standard)
+  //   blue  — below both thresholds
+  const aboveOld = payload.ppb >= ACTION_LEVEL_OLD_PPB;
+  const aboveNew = payload.ppb >= ACTION_LEVEL_NEW_PPB;
+  const fill     = aboveOld ? COLOR_OLD_STANDARD : aboveNew ? COLOR_NEW_STANDARD : '#3b82f6';
+  const r        = aboveOld ? 8 : aboveNew ? 7 : 6;
+
   return (
     <circle
       cx={cx}
       cy={cy}
-      r={isAbove ? 8 : 6}
-      fill={isAbove ? '#dc2626' : '#3b82f6'}
+      r={r}
+      fill={fill}
       stroke="#fff"
       strokeWidth={2}
     />
@@ -223,22 +247,27 @@ function LeadLevelTrendChart({ data = mergedData }) {
 
   // Insight box logic
   const valuesWithData  = chartData.filter((d) => d.ppb != null);
-  const everExceeded    = chartData.some((d) => d.aboveActionLevel);
+  // Exceeded the current (more strict) 12 ppb standard
+  const everExceededNew = chartData.some((d) => d.ppb != null && d.ppb >= ACTION_LEVEL_NEW_PPB);
+  // Exceeded the older 15 ppb standard
+  const everExceededOld = chartData.some((d) => d.ppb != null && d.ppb >= ACTION_LEVEL_OLD_PPB);
   const isTrendingDown  = valuesWithData.length >= 2 &&
     valuesWithData[valuesWithData.length - 1].ppb < valuesWithData[0].ppb;
 
   const insightMessage = () => {
-    if (valuesWithData.length === 0)   return 'No monitoring data available for this system.';
-    if (everExceeded && isTrendingDown) return `${selectedName} exceeded Michigan's action level but lead levels have since declined.`;
-    if (everExceeded)                  return `${selectedName} has exceeded Michigan's ${ACTION_LEVEL_PPB} ppb lead action level.`;
-    if (isTrendingDown)                return `Lead levels in ${selectedName} have declined over this period.`;
-    return `Lead levels in ${selectedName} have remained below the ${ACTION_LEVEL_PPB} ppb action level.`;
+    if (valuesWithData.length === 0)       return 'No monitoring data available for this system.';
+    if (everExceededOld && isTrendingDown) return `${selectedName} has exceeded the ${ACTION_LEVEL_OLD_PPB} ppb standard but lead levels have since declined.`;
+    if (everExceededOld)                   return `${selectedName} has exceeded Michigan's ${ACTION_LEVEL_OLD_PPB} ppb lead action level.`;
+    if (everExceededNew && isTrendingDown) return `${selectedName} has exceeded the current ${ACTION_LEVEL_NEW_PPB} ppb standard but lead levels have since declined.`;
+    if (everExceededNew)                   return `${selectedName} has exceeded Michigan's current ${ACTION_LEVEL_NEW_PPB} ppb lead action level (2025 standard).`;
+    if (isTrendingDown)                    return `Lead levels in ${selectedName} have declined over this period.`;
+    return `Lead levels in ${selectedName} have remained below Michigan's ${ACTION_LEVEL_NEW_PPB} ppb action level.`;
   };
 
-  const insightClass = everExceeded ? 'yellow' : 'green';
+  const insightClass = everExceededOld ? 'yellow' : everExceededNew ? 'yellow' : 'green';
 
   // Y-axis: always show the action level line, with 15% headroom above max
-  const maxPpb = Math.max(...valuesWithData.map((d) => d.ppb), ACTION_LEVEL_PPB + 2);
+  const maxPpb = Math.max(...valuesWithData.map((d) => d.ppb), ACTION_LEVEL_OLD_PPB + 2);
   const yMax   = Math.ceil(maxPpb * 1.15);
 
   return (
@@ -301,6 +330,7 @@ function LeadLevelTrendChart({ data = mergedData }) {
                 dataKey="year"
                 stroke="#64748b"
                 tick={{ fontSize: 12 }}
+                padding={{ left: 10, right: 20 }}
                 // Rotate labels when the system has many years to prevent overlap
                 angle={chartData.length > 6 ? -45 : 0}
                 textAnchor={chartData.length > 6 ? 'end' : 'middle'}
@@ -315,18 +345,36 @@ function LeadLevelTrendChart({ data = mergedData }) {
               />
               <Tooltip content={<CustomTooltip />} />
 
-              {/* Red dashed reference line at Michigan's 15 ppb action level */}
+              {/* Amber dashed line — 15 ppb pre-2025 standard */}
+              {/* Orange dashed line — 15 ppb pre-2025 standard */}
               <ReferenceLine
-                y={ACTION_LEVEL_PPB}
-                stroke="#dc2626"
+                y={ACTION_LEVEL_OLD_PPB}
+                stroke={COLOR_OLD_STANDARD}
                 strokeDasharray="5 4"
                 strokeWidth={1.5}
                 label={{
-                  value:    `${ACTION_LEVEL_PPB} ppb action level`,
-                  position: 'insideTopRight',
-                  fontSize: 11,
-                  fill:     '#dc2626',
-                  dy:       -6,
+                  value:      `${ACTION_LEVEL_OLD_PPB} ppb (pre-2025)`,
+                  position:   'insideBottomLeft',
+                  fontSize:   10,
+                  fill:       COLOR_OLD_STANDARD,
+                  fontWeight: 600,
+                  dy:         -5,
+                }}
+              />
+              {/* Red dashed line — 12 ppb current 2025 standard (more strict) */}
+              {/* Deep red dashed line — 12 ppb current 2025 standard */}
+              <ReferenceLine
+                y={ACTION_LEVEL_NEW_PPB}
+                stroke={COLOR_NEW_STANDARD}
+                strokeDasharray="5 4"
+                strokeWidth={1.5}
+                label={{
+                  value:      `${ACTION_LEVEL_NEW_PPB} ppb (current 2025)`,
+                  position:   'insideBottomLeft',
+                  fontSize:   10,
+                  fill:       COLOR_NEW_STANDARD,
+                  fontWeight: 600,
+                  dy:         -5,
                 }}
               />
 
@@ -350,7 +398,7 @@ function LeadLevelTrendChart({ data = mergedData }) {
           {/* Data note */}
           <p style={{ fontSize: '0.72rem', color: '#9ca3af', margin: '0.5rem 0 0', lineHeight: 1.4 }}>
             90th percentile lead concentration from EGLE monitoring data.
-            Michigan's lead action level is {ACTION_LEVEL_PPB} ppb.
+            Michigan's current lead action level is {ACTION_LEVEL_NEW_PPB} ppb (2025 standard). The previous standard was {ACTION_LEVEL_OLD_PPB} ppb.
             Gaps indicate years with no monitoring data for this system.
             Multiple monitoring periods in the same year show the most recent result.
           </p>
