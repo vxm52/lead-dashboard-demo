@@ -17,7 +17,7 @@ DSMI_FILE = "DSMI-Service-Line-Materials-Estimates.xlsx"
 LSLR_FILE = "2024-2025-LSLR-Data.xlsx"
 SOCRATA_FILE = "socrata-90th-percentile.json"
 CENTROID_FILE = "mi_cwb_centroids.geojson"
-OUTPUT_CSV = "lead-data-test.csv"
+OUTPUT_CSV = "lead-data.csv"
 
 HEADER_ROW = 2
 
