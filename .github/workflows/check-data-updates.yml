@@ -12,9 +12,13 @@
 
 name: Check for Data Updates
 
+permissions:
+  contents: write
+  issues: write
+
 on:
   schedule:
-    # Run daily at 9 AM Eastern (14:00 UTC, or 13:00 during DST)
+    # Run daily at 14:00 UTC (9 AM EST / 10 AM EDT)
     - cron: '0 14 * * *'
   workflow_dispatch:  # Allow manual trigger
 
@@ -49,17 +53,18 @@ jobs:
             echo "changes_detected=false" >> $GITHUB_OUTPUT
             echo "changes_count=0" >> $GITHUB_OUTPUT
             echo "changes_json=[]" >> $GITHUB_OUTPUT
-            echo "fetch_success=true" >> $GITHUB_OUTPUT
-            echo "fetch_errors=[]" >> $GITHUB_OUTPUT
+            echo "fetch_success=false" >> $GITHUB_OUTPUT
+            echo "fetch_errors=[{\"name\":\"State file\",\"error\":\"data/data-state.json not found after fetch step\"}]" >> $GITHUB_OUTPUT
           fi
 
       - name: Commit data and state
+        if: steps.outputs.outputs.fetch_success == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add data/ || true
           git diff --staged --quiet || git commit -m "Update data and state [skip ci]"
-          git push || true
+          git push
 
       - name: Create issue if changes or fetch errors
         if: steps.outputs.outputs.changes_detected == 'true' || steps.outputs.outputs.fetch_success == 'false'

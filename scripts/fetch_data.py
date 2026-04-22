@@ -44,6 +44,7 @@ def load_data_state():
 
 def save_data_state(state):
     """Save current data state to file."""
+    os.makedirs(DATA_DIR, exist_ok=True)
     with open(DATA_STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
 
@@ -60,6 +61,7 @@ def restore_from_backup():
     """Restore data/ from data-backup/ (overwrites current data)."""
     if not os.path.exists(DATA_BACKUP_DIR):
         return
+    os.makedirs(DATA_DIR, exist_ok=True)
     for name in os.listdir(DATA_BACKUP_DIR):
         src = os.path.join(DATA_BACKUP_DIR, name)
         dst = os.path.join(DATA_DIR, name)
@@ -238,6 +240,7 @@ def main():
     backup_data()
 
     fetch_errors = []
+    fatal_errors = []
 
     # 1. Fetch Socrata API
     try:
@@ -270,21 +273,45 @@ def main():
     # On any fetch failure: restore from backup so data stays consistent
     if fetch_errors:
         print("\nRestoring from backup (some fetches failed)...")
-        restore_from_backup()
-        print("Backup kept at data-backup/")
+        try:
+            restore_from_backup()
+            print("Backup kept at data-backup/")
+        except Exception as e:
+            print(f"  ✗ Backup restore failed: {e}")
+            fatal_errors.append({
+                "source": "restore",
+                "name": "Backup restore",
+                "error": str(e),
+            })
 
     # Detect changes and save state
     print("\nChecking for data changes...")
-    current_state, changes = detect_data_changes()
+    changes = []
+    try:
+        current_state, changes = detect_data_changes()
+    except Exception as e:
+        print(f"  ✗ Failed to detect changes: {e}")
+        current_state = {"sources": {}, "last_check": datetime.now().isoformat()}
+        fatal_errors.append({
+            "source": "state",
+            "name": "State generation",
+            "error": str(e),
+        })
+
+    all_errors = fetch_errors + fatal_errors
     current_state["changes"] = changes
     current_state["changes_count"] = len(changes)
-    current_state["fetch_success"] = len(fetch_errors) == 0
-    current_state["fetch_errors"] = fetch_errors
-    save_data_state(current_state)
+    current_state["fetch_success"] = len(all_errors) == 0
+    current_state["fetch_errors"] = all_errors
+    try:
+        save_data_state(current_state)
+    except Exception as e:
+        print(f"  ✗ Failed to save state file: {e}")
+        raise SystemExit(1)
 
-    if fetch_errors:
-        print(f"\n✗ FETCH FAILURES: {len(fetch_errors)} source(s) failed")
-        for err in fetch_errors:
+    if all_errors:
+        print(f"\n✗ FETCH FAILURES: {len(all_errors)} source(s) failed")
+        for err in all_errors:
             print(f"  - {err['name']}: {err['error']}")
 
     if changes:
@@ -299,7 +326,7 @@ def main():
             clear_backup()
             print("Backup cleared.")
 
-    if fetch_errors:
+    if all_errors:
         raise SystemExit(1)
 
 
