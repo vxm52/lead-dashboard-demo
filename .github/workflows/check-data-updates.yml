@@ -12,9 +12,13 @@
 
 name: Check for Data Updates
 
+permissions:
+  contents: write
+  issues: write
+
 on:
   schedule:
-    # Run daily at 9 AM Eastern (14:00 UTC, or 13:00 during DST)
+    # Run daily at 14:00 UTC (9 AM EST / 10 AM EDT)
     - cron: '0 14 * * *'
   workflow_dispatch:  # Allow manual trigger
 
@@ -35,268 +39,95 @@ jobs:
         run: |
           pip install requests beautifulsoup4
 
-      - name: Check for data updates
-        id: check
+      - name: Fetch data and check for updates
+        id: fetch
+        run: python scripts/fetch_data.py
+        continue-on-error: true
+
+      - name: Set workflow outputs from state
+        id: outputs
         run: |
-          python << 'EOF'
-          import requests
-          import hashlib
-          import json
-          import os
-          from datetime import datetime
-          from bs4 import BeautifulSoup
+          if [ -f "data/data-state.json" ]; then
+            python3 -c 'import json,os;s=json.load(open("data/data-state.json"));c=s.get("changes_count",0);ch=json.dumps(s.get("changes",[])).replace("%","%25").replace("\n","%0A").replace("\r","%0D");fs=str(s.get("fetch_success",True)).lower();fe=json.dumps(s.get("fetch_errors",[])).replace("%","%25").replace("\n","%0A").replace("\r","%0D");open(os.environ["GITHUB_OUTPUT"],"a").write(f"changes_detected={str(c>0).lower()}\nchanges_count={c}\nchanges_json={ch}\nfetch_success={fs}\nfetch_errors={fe}\n")'
+          else
+            echo "changes_detected=false" >> $GITHUB_OUTPUT
+            echo "changes_count=0" >> $GITHUB_OUTPUT
+            echo "changes_json=[]" >> $GITHUB_OUTPUT
+            echo "fetch_success=false" >> $GITHUB_OUTPUT
+            echo "fetch_errors=[{\"name\":\"State file\",\"error\":\"data/data-state.json not found after fetch step\"}]" >> $GITHUB_OUTPUT
+          fi
 
-          # File to store previous state
-          STATE_FILE = '.data-check-state.json'
-
-          def load_state():
-              """Load previous check state from file."""
-              try:
-                  with open(STATE_FILE, 'r') as f:
-                      return json.load(f)
-              except FileNotFoundError:
-                  return {}
-
-          def save_state(state):
-              """Save current state to file."""
-              with open(STATE_FILE, 'w') as f:
-                  json.dump(state, f, indent=2)
-
-          def get_content_hash(content):
-              """Generate MD5 hash of content."""
-              return hashlib.md5(content.encode('utf-8')).hexdigest()
-
-          def check_socrata_api():
-              """
-              Check Michigan 90th Percentile API for changes.
-              Returns dict with status info.
-              """
-              url = "https://data.michigan.gov/resource/39ya-9txc.json"
-              try:
-                  # Get record count
-                  count_url = f"{url}?$select=count(*)"
-                  count_resp = requests.get(count_url, timeout=30)
-                  count_data = count_resp.json()
-                  record_count = int(count_data[0]['count']) if count_data else 0
-                  
-                  # Get sample of recent records for hash comparison
-                  # Sort by any date field if available, otherwise just get first 100
-                  sample_url = f"{url}?$limit=100&$order=:id"
-                  sample_resp = requests.get(sample_url, timeout=30)
-                  sample_data = sample_resp.json()
-                  content_hash = get_content_hash(json.dumps(sample_data, sort_keys=True))
-                  
-                  return {
-                      'success': True,
-                      'record_count': record_count,
-                      'content_hash': content_hash,
-                      'url': 'https://data.michigan.gov/dataset/Public-Water-Supply-90th-Percentiles/39ya-9txc'
-                  }
-              except Exception as e:
-                  return {'success': False, 'error': str(e)}
-
-          def check_webpage(url, name):
-              """
-              Check a webpage for content changes.
-              Returns dict with status info.
-              """
-              try:
-                  headers = {
-                      'User-Agent': 'Mozilla/5.0 (compatible; DataMonitor/1.0; +https://planetdetroit.org)'
-                  }
-                  resp = requests.get(url, headers=headers, timeout=30)
-                  resp.raise_for_status()
-                  
-                  # Parse HTML and extract main content (ignore dynamic elements)
-                  soup = BeautifulSoup(resp.text, 'html.parser')
-                  
-                  # Remove script, style, and other dynamic elements
-                  for element in soup(['script', 'style', 'nav', 'footer', 'header']):
-                      element.decompose()
-                  
-                  # Get text content
-                  text_content = soup.get_text(separator=' ', strip=True)
-                  content_hash = get_content_hash(text_content)
-                  
-                  # Look for links to data files (CSV, Excel, etc.)
-                  data_links = []
-                  for link in soup.find_all('a', href=True):
-                      href = link['href'].lower()
-                      if any(ext in href for ext in ['.csv', '.xlsx', '.xls', '.zip', '.pdf']):
-                          data_links.append(link['href'])
-                  
-                  return {
-                      'success': True,
-                      'content_hash': content_hash,
-                      'data_links_count': len(data_links),
-                      'url': url
-                  }
-              except Exception as e:
-                  return {'success': False, 'error': str(e), 'url': url}
-
-          def main():
-              print("=" * 60)
-              print(f"Data Update Check - {datetime.now().isoformat()}")
-              print("=" * 60)
-              
-              # Load previous state
-              prev_state = load_state()
-              current_state = {}
-              changes = []
-              
-              # 1. Check Socrata API (90th Percentile data)
-              print("\n[1/3] Checking Michigan 90th Percentile API...")
-              api_result = check_socrata_api()
-              current_state['socrata_api'] = api_result
-              
-              if api_result['success']:
-                  print(f"  ✓ Record count: {api_result['record_count']}")
-                  print(f"  ✓ Content hash: {api_result['content_hash'][:12]}...")
-                  
-                  prev_api = prev_state.get('socrata_api', {})
-                  if prev_api.get('record_count') and prev_api['record_count'] != api_result['record_count']:
-                      changes.append({
-                          'source': '90th Percentile API (Socrata)',
-                          'type': 'Record count changed',
-                          'details': f"Previous: {prev_api['record_count']}, Current: {api_result['record_count']}",
-                          'url': api_result['url']
-                      })
-                  elif prev_api.get('content_hash') and prev_api['content_hash'] != api_result['content_hash']:
-                      changes.append({
-                          'source': '90th Percentile API (Socrata)',
-                          'type': 'Data content changed',
-                          'details': 'Record content has been modified',
-                          'url': api_result['url']
-                      })
-              else:
-                  print(f"  ✗ Error: {api_result.get('error')}")
-              
-              # 2. Check DSMI Inventories page
-              print("\n[2/3] Checking EGLE DSMI Inventories page...")
-              dsmi_url = "https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule/dsmi-inventories"
-              dsmi_result = check_webpage(dsmi_url, "DSMI Inventories")
-              current_state['dsmi_page'] = dsmi_result
-              
-              if dsmi_result['success']:
-                  print(f"  ✓ Content hash: {dsmi_result['content_hash'][:12]}...")
-                  print(f"  ✓ Data file links found: {dsmi_result['data_links_count']}")
-                  
-                  prev_dsmi = prev_state.get('dsmi_page', {})
-                  if prev_dsmi.get('content_hash') and prev_dsmi['content_hash'] != dsmi_result['content_hash']:
-                      changes.append({
-                          'source': 'EGLE DSMI Inventories Page',
-                          'type': 'Page content changed',
-                          'details': 'The DSMI inventories page has been updated - new data may be available',
-                          'url': dsmi_url
-                      })
-              else:
-                  print(f"  ✗ Error: {dsmi_result.get('error')}")
-              
-              # 3. Check Lead & Copper Rule page
-              print("\n[3/3] Checking EGLE Lead & Copper Rule page...")
-              lcr_url = "https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule"
-              lcr_result = check_webpage(lcr_url, "Lead & Copper Rule")
-              current_state['lcr_page'] = lcr_result
-              
-              if lcr_result['success']:
-                  print(f"  ✓ Content hash: {lcr_result['content_hash'][:12]}...")
-                  print(f"  ✓ Data file links found: {lcr_result['data_links_count']}")
-                  
-                  prev_lcr = prev_state.get('lcr_page', {})
-                  if prev_lcr.get('content_hash') and prev_lcr['content_hash'] != lcr_result['content_hash']:
-                      changes.append({
-                          'source': 'EGLE Lead & Copper Rule Page',
-                          'type': 'Page content changed',
-                          'details': 'The Lead & Copper Rule page has been updated',
-                          'url': lcr_url
-                      })
-              else:
-                  print(f"  ✗ Error: {lcr_result.get('error')}")
-              
-              # Save current state
-              current_state['last_check'] = datetime.now().isoformat()
-              save_state(current_state)
-              
-              # Report results
-              print("\n" + "=" * 60)
-              if changes:
-                  print(f"🚨 CHANGES DETECTED: {len(changes)} update(s) found!")
-                  for i, change in enumerate(changes, 1):
-                      print(f"\n  [{i}] {change['source']}")
-                      print(f"      Type: {change['type']}")
-                      print(f"      Details: {change['details']}")
-                      print(f"      URL: {change['url']}")
-                  
-                  # Set output for GitHub Actions
-                  changes_json = json.dumps(changes)
-                  with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
-                      f.write(f"changes_detected=true\n")
-                      f.write(f"changes_count={len(changes)}\n")
-                      # Escape for GitHub Actions
-                      escaped_json = changes_json.replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
-                      f.write(f"changes_json={escaped_json}\n")
-              else:
-                  print("✓ No changes detected. All data sources unchanged.")
-                  with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
-                      f.write("changes_detected=false\n")
-                      f.write("changes_count=0\n")
-              
-              print("=" * 60)
-
-          if __name__ == '__main__':
-              main()
-          EOF
-
-      - name: Commit state file
+      - name: Commit data and state
+        if: steps.outputs.outputs.fetch_success == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add .data-check-state.json || true
-          git diff --staged --quiet || git commit -m "Update data check state [skip ci]"
-          git push || true
+          git add data/ || true
+          git diff --staged --quiet || git commit -m "Update data and state [skip ci]"
+          git push
 
-      - name: Create issue if changes detected
-        if: steps.check.outputs.changes_detected == 'true'
+      - name: Create issue if changes or fetch errors
+        if: steps.outputs.outputs.changes_detected == 'true' || steps.outputs.outputs.fetch_success == 'false'
         uses: actions/github-script@v7
         with:
           script: |
-            const changesCount = '${{ steps.check.outputs.changes_count }}';
-            const changesJson = decodeURIComponent('${{ steps.check.outputs.changes_json }}'.replace(/%0A/g, '\n').replace(/%0D/g, '\r').replace(/%25/g, '%'));
+            const changesCount = '${{ steps.outputs.outputs.changes_count }}';
+            const changesJson = decodeURIComponent('${{ steps.outputs.outputs.changes_json }}'.replace(/%0A/g, '\n').replace(/%0D/g, '\r').replace(/%25/g, '%'));
+            const fetchErrorsJson = decodeURIComponent('${{ steps.outputs.outputs.fetch_errors }}'.replace(/%0A/g, '\n').replace(/%0D/g, '\r').replace(/%25/g, '%'));
             
             let changes;
-            try {
-              changes = JSON.parse(changesJson);
-            } catch (e) {
-              changes = [{ source: 'Unknown', type: 'Parse error', details: changesJson }];
-            }
+            try { changes = JSON.parse(changesJson); } catch (e) { changes = []; }
+            let fetchErrors;
+            try { fetchErrors = JSON.parse(fetchErrorsJson); } catch (e) { fetchErrors = []; }
             
             const date = new Date().toISOString().split('T')[0];
+            const hasChanges = changes.length > 0;
+            const hasFetchErrors = fetchErrors.length > 0;
             
-            let body = `## 🚨 Data Source Update Detected\n\n`;
+            let body = hasChanges ? `## 🚨 Data Source Update Detected\n\n` : `## ⚠️ Data Fetch Alert\n\n`;
             body += `**Date:** ${date}\n`;
-            body += `**Changes Found:** ${changesCount}\n\n`;
-            body += `---\n\n`;
+            if (hasChanges) body += `**Changes Found:** ${changesCount}\n`;
+            if (hasFetchErrors) body += `**Fetch Failures:** ${fetchErrors.length} source(s)\n`;
+            body += `\n---\n\n`;
             
-            for (const change of changes) {
-              body += `### ${change.source}\n\n`;
-              body += `- **Type:** ${change.type}\n`;
-              body += `- **Details:** ${change.details}\n`;
-              body += `- **URL:** ${change.url}\n\n`;
+            if (hasChanges) {
+              body += `### Changed Sources\n\n`;
+              for (const change of changes) {
+                body += `#### ${change.source}\n`;
+                body += `- **Type:** ${change.type}\n`;
+                body += `- **Details:** ${change.details}\n`;
+                if (change.file) body += `- **File:** ${change.file}\n`;
+                body += `\n`;
+              }
             }
             
-            body += `---\n\n`;
-            body += `### Recommended Actions\n\n`;
-            body += `1. Review the changed data source(s)\n`;
-            body += `2. Download updated data if applicable\n`;
+            if (hasFetchErrors) {
+              body += `### Fetch Errors\n\n`;
+              for (const err of fetchErrors) {
+                body += `#### ${err.name}\n`;
+                body += `- **Error:** ${err.error}\n\n`;
+              }
+            }
+            
+            body += `---\n\n### Recommended Actions\n\n`;
+            body += `1. Review the above\n`;
+            if (hasFetchErrors) body += `2. Data was restored from backup (fetch failed for some sources)\n`;
+            if (hasChanges && !hasFetchErrors) body += `2. Data has been fetched to \`data/\` (backup at \`data-backup/\`)\n`;
             body += `3. Run the conversion script: \`node scripts/convertCsv.js\`\n`;
             body += `4. Test locally: \`npm start\`\n`;
             body += `5. Deploy: \`npm run deploy\`\n\n`;
             body += `*This issue was automatically created by the data monitoring workflow.*`;
             
+            let title = `📊 Data Alert: `;
+            if (hasChanges && hasFetchErrors) title += `${changesCount} change(s), ${fetchErrors.length} fetch failure(s)`;
+            else if (hasChanges) title += `${changesCount} source(s) changed`;
+            else title += `${fetchErrors.length} fetch failure(s)`;
+            title += ` - ${date}`;
+            
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `📊 Data Update Alert: ${changesCount} source(s) changed - ${date}`,
-              body: body,
+              title,
+              body,
               labels: ['data-update', 'automated']
             });
