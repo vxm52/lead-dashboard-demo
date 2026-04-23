@@ -186,7 +186,7 @@ function LeadLineMap() {
                     <>
                       <p><strong>Known Lead Lines:</strong> {system.leadLines.toLocaleString()}</p>
                       <p><strong>GPCL:</strong> {system.gpcl.toLocaleString()}</p>
-                      <p><strong>Total to Replace:</strong> {system.totalToReplace.toLocaleString()}</p>
+                      <p><strong>Total to ID or Replace:</strong> {system.totalToReplace.toLocaleString()}</p>
                       <p><strong>Total Replaced:</strong> {system.totalReplaced.toLocaleString()}</p>
                       {system.totalToReplace > 0 && (
                         <p><strong>Progress:</strong> {system.percentReplaced.toFixed(1)}%</p>

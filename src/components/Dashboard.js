@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import './Dashboard.css';
-import ReplacementTrendChart from './ReplacementTrendChart';
-import LeadLevelTrendChart from './LeadLevelTrendChart';
+import SystemTrendPanel from './SystemTrendPanel';
 import ComplianceStatusChart from './ComplianceStatusChart';
 
 
@@ -20,6 +19,8 @@ function Dashboard() {
     { name: 'Unknown Material', value: 315372, color: '#ca8a04' },
     { name: 'Non-Lead', value: 2026676, color: '#16a34a' }
   ];
+
+  const compositionTotal = compositionData.reduce((sum, d) => sum + d.value, 0);
   
   useEffect(() => {
     const duration = 2000;
@@ -79,7 +80,9 @@ function Dashboard() {
         </div>
         
         <div className="charts-grid">
-          <ReplacementTrendChart />
+          {/* Combined system trend panel — one dropdown controls both
+              Annual Replacement Trend and Lead Levels Over Time charts */}
+          <SystemTrendPanel />
           
           <div className="chart-card">
             <h3>Service Line Composition</h3>
@@ -110,7 +113,7 @@ function Dashboard() {
                   <span className="pie-legend-color" style={{ backgroundColor: entry.color }}></span>
                   <span className="pie-legend-label">{entry.name}</span>
                   <span className="pie-legend-value">{entry.value.toLocaleString()}</span>
-                  <span className="pie-legend-percent">({((entry.value / 2606706) * 100).toFixed(1)}%)</span>
+                  <span className="pie-legend-percent">({((entry.value / compositionTotal) * 100).toFixed(1)}%)</span>
                 </div>
               ))}
             </div>
@@ -119,8 +122,7 @@ function Dashboard() {
             </div>
           </div>
 
-          <LeadLevelTrendChart />
-
+          {/* Compliance status breakdown — driven by waterSystemsData */}
           <ComplianceStatusChart />
         </div>
         
