@@ -56,40 +56,52 @@ const COLOR_LINE         = '#3b82f6'; // blue — lead level line
 // =============================================================================
 
 /**
- * Returns all systems that appear in the dataset, sorted by display_name.
- * Used to populate the shared system dropdown.
- * A system is included if it has either monitoring data or replacement data.
+ * Returns one entry per base_pwsid for the system dropdown.
+ * When a base PWSID has multiple subsystems (resolved as -a, -b etc.), they are
+ * grouped under the base PWSID using the shortest display_name as the label.
+ * This prevents duplicate dropdown entries for cities like Traverse City that
+ * were split by the pipeline due to multiple system name variants.
  *
  * @param {Array} data — full merged dataset
- * @returns {Array<{ resolved_pwsid: string, display_name: string }>}
+ * @returns {Array<{ base_pwsid: string, display_name: string }>}
  */
 function getAllSystems(data) {
-  const seen = new Map();
+  const byBase = new Map();
+
   data.forEach((row) => {
-    if (!seen.has(row.resolved_pwsid)) {
-      seen.set(row.resolved_pwsid, row.display_name);
+    if (!byBase.has(row.base_pwsid)) {
+      byBase.set(row.base_pwsid, row.display_name);
+    } else {
+      // Prefer the shorter name as the display label (e.g. "TRAVERSE CITY"
+      // over "TRAVERSE CITY, CITY OF") — shorter names are typically cleaner
+      const existing = byBase.get(row.base_pwsid);
+      if (row.display_name.length < existing.length) {
+        byBase.set(row.base_pwsid, row.display_name);
+      }
     }
   });
-  return Array.from(seen.entries())
-    .map(([resolved_pwsid, display_name]) => ({ resolved_pwsid, display_name }))
+
+  return Array.from(byBase.entries())
+    .map(([base_pwsid, display_name]) => ({ base_pwsid, display_name }))
     .sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
 
 /**
  * Returns the annual replacement series for a system across LSLR_YEARS.
+ * Filters by base_pwsid so all subsystems (-a, -b etc.) are aggregated together.
  * Years with no data default to 0 so the x-axis stays consistent.
  *
- * @param {Array}  data          — full merged dataset
- * @param {string} resolvedPwsid — resolved_pwsid of the selected system
+ * @param {Array}  data       — full merged dataset
+ * @param {string} basePwsid  — base_pwsid of the selected system
  * @returns {Array<{ year: string, replacements: number }>}
  */
-function getReplacementSeries(data, resolvedPwsid) {
+function getReplacementSeries(data, basePwsid) {
   const totals = {};
   LSLR_YEARS.forEach((y) => { totals[y] = 0; });
 
   data
     .filter((row) =>
-      row.resolved_pwsid === resolvedPwsid &&
+      row.base_pwsid === basePwsid &&
       LSLR_YEARS.includes(row.year) &&
       row.lines_replaced != null
     )
@@ -102,34 +114,57 @@ function getReplacementSeries(data, resolvedPwsid) {
 
 /**
  * Returns the lead monitoring time series for a system.
+ * Filters by base_pwsid so all subsystems (-a, -b etc.) are included.
  * Only includes years the system actually has data for — x-axis is scoped
- * to the system's own history to avoid sparse/awkward charts.
- * When multiple monitoring rows exist for the same year, the most recent
- * monitoring_end_date is used.
+ * to the system's own history to avoid sparse charts.
+ * When multiple rows exist for the same year (different monitoring_end_date
+ * or different subsystems), the highest ppb value is used — showing the
+ * worst-case reading is more informative for public health purposes.
  *
- * @param {Array}  data          — full merged dataset
- * @param {string} resolvedPwsid — resolved_pwsid of the selected system
+ * @param {Array}  data      — full merged dataset
+ * @param {string} basePwsid — base_pwsid of the selected system
  * @returns {Array<{ year: string, ppb: number, aboveActionLevel: boolean }>}
  */
-function getLeadSeries(data, resolvedPwsid) {
-  const latestByYear = {};
+function getLeadSeries(data, basePwsid) {
+  const worstByYear = {};
 
   data
-    .filter((row) => row.resolved_pwsid === resolvedPwsid && row.lead_90th_ppb != null)
+    .filter((row) => row.base_pwsid === basePwsid && row.lead_90th_ppb != null)
     .forEach((row) => {
-      const existing = latestByYear[row.year];
-      if (!existing || new Date(row.monitoring_end_date) > new Date(existing.monitoring_end_date)) {
-        latestByYear[row.year] = row;
+      const existing = worstByYear[row.year];
+      // Use the highest ppb reading for the year across all subsystems
+      if (!existing || row.lead_90th_ppb > existing.lead_90th_ppb) {
+        worstByYear[row.year] = row;
       }
     });
 
-  return Object.values(latestByYear)
+  return Object.values(worstByYear)
     .sort((a, b) => a.year - b.year)
     .map((row) => ({
       year:             String(row.year),
       ppb:              row.lead_90th_ppb,
       aboveActionLevel: row.above_action_level,
     }));
+}
+
+/**
+ * Returns the most recent total_to_identify_or_replace value for a system.
+ * Looks across all subsystems (base_pwsid match) for the inventory row
+ * with the most recent year that has a non-null value.
+ * Used to show remaining lines context below the replacement trend chart.
+ *
+ * @param {Array}  data      — full merged dataset
+ * @param {string} basePwsid — base_pwsid of the selected system
+ * @returns {number|null}
+ */
+function getInventoryTotal(data, basePwsid) {
+  const inventoryRows = data.filter(
+    (row) => row.base_pwsid === basePwsid && row.total_to_identify_or_replace != null
+  );
+  if (inventoryRows.length === 0) return null;
+  // Pick the most recent inventory year
+  const latest = inventoryRows.reduce((best, row) => row.year > best.year ? row : best);
+  return latest.total_to_identify_or_replace;
 }
 
 // =============================================================================
@@ -223,16 +258,22 @@ function SystemTrendPanel({ data = mergedData }) {
 
   // Default to the first system
   const [selectedPwsid, setSelectedPwsid] = useState(
-    () => allSystems[0]?.resolved_pwsid ?? null
+    () => allSystems[0]?.base_pwsid ?? null
   );
 
   const selectedName = allSystems.find(
-    (s) => s.resolved_pwsid === selectedPwsid
+    (s) => s.base_pwsid === selectedPwsid
   )?.display_name ?? '';
 
   // Replacement data for selected system
   const replacementData = useMemo(
     () => selectedPwsid ? getReplacementSeries(data, selectedPwsid) : [],
+    [data, selectedPwsid]
+  );
+
+  // Total lines remaining from 2025 inventory (aggregated across subsystems)
+  const inventoryTotal = useMemo(
+    () => selectedPwsid ? getInventoryTotal(data, selectedPwsid) : null,
     [data, selectedPwsid]
   );
 
@@ -302,7 +343,7 @@ function SystemTrendPanel({ data = mergedData }) {
             style={selectStyle}
           >
             {allSystems.map((s) => (
-              <option key={s.resolved_pwsid} value={s.resolved_pwsid}>
+              <option key={s.base_pwsid} value={s.base_pwsid}>
                 {s.display_name}
               </option>
             ))}
@@ -332,6 +373,28 @@ function SystemTrendPanel({ data = mergedData }) {
           <Bar dataKey="replacements" fill={COLOR_BAR} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
+
+      {/* Lines remaining — inventory context to give the replacement numbers scale */}
+      {inventoryTotal != null && (
+        <div style={{
+          display:        'flex',
+          alignItems:     'center',
+          gap:            '0.5rem',
+          margin:         '0.5rem 0',
+          padding:        '0.5rem 0.75rem',
+          background:     '#f8fafc',
+          border:         '1px solid #e2e8f0',
+          borderRadius:   '6px',
+          fontSize:       '0.82rem',
+          color:          '#374151',
+        }}>
+          <span style={{ color: '#6b7280' }}>Lines remaining to identify or replace:</span>
+          <strong style={{ fontSize: '1rem', color: '#111827' }}>
+            {inventoryTotal.toLocaleString()}
+          </strong>
+          <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>(2025 inventory)</span>
+        </div>
+      )}
 
       {/* Replacement insight */}
       <div className={`insight-box ${insightClass}`} style={{ margin: '0.5rem 0 1.5rem' }}>
