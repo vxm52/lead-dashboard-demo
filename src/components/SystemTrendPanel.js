@@ -246,17 +246,37 @@ function SystemTrendPanel({ data = mergedData }) {
   const maxPpb = Math.max(...leadData.map((d) => d.ppb), ACTION_LEVEL_PPB + 2);
   const yMax   = Math.ceil(maxPpb * 1.15);
 
-  // Replacement insight: % change 2021 → 2024
-  const firstReplaced = replacementData[0]?.replacements;
-  const lastReplaced  = replacementData[replacementData.length - 1]?.replacements;
-  const pctChange     = firstReplaced ? Math.round(((lastReplaced - firstReplaced) / firstReplaced) * 100) : null;
-  const insightText   = pctChange != null
-    ? `${pctChange > 0 ? '+' : ''}${pctChange}% change from ${LSLR_YEARS[0]} to ${LSLR_YEARS[LSLR_YEARS.length - 1]}`
-    : 'No replacement data for this system (2021–2024)';
-  const insightClass  = pctChange != null && pctChange > 0 ? 'green' : 'yellow';
+  // Replacement insight — describe what's visible in the chart intuitively.
+  // Uses the years that actually have non-zero data rather than assuming
+  // a fixed start year, so the message is always accurate regardless of
+  // which years a system has replacement records.
+  const yearsWithData   = replacementData.filter((d) => d.replacements > 0);
+  const hasAnyData      = yearsWithData.length > 0;
+  const totalReplaced   = replacementData.reduce((sum, d) => sum + d.replacements, 0);
+  const peakYear        = hasAnyData
+    ? replacementData.reduce((best, d) => d.replacements > best.replacements ? d : best)
+    : null;
+
+  // Calculate trend only when there are at least two years with data
+  const firstWithData   = yearsWithData[0];
+  const lastWithData    = yearsWithData[yearsWithData.length - 1];
+  const canTrend        = yearsWithData.length >= 2 && firstWithData.replacements > 0;
+  const pctChange       = canTrend
+    ? Math.round(((lastWithData.replacements - firstWithData.replacements) / firstWithData.replacements) * 100)
+    : null;
+
+  const insightText = !hasAnyData
+    ? 'No replacement data recorded for this system (2021–2024).'
+    : yearsWithData.length === 1
+      ? `${totalReplaced.toLocaleString()} lines replaced in ${peakYear.year} — the only year with recorded replacements.`
+      : pctChange != null
+        ? `${pctChange > 0 ? '+' : ''}${pctChange}% from ${firstWithData.year} to ${lastWithData.year} · ${totalReplaced.toLocaleString()} total lines replaced`
+        : `${totalReplaced.toLocaleString()} total lines replaced across ${yearsWithData.length} years`;
+
+  const insightClass = hasAnyData ? 'green' : 'yellow';
 
   return (
-    <div className="chart-card">
+    <div className="chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
 
       {/* ── Shared header: title + single system selector ── */}
       <div style={{
@@ -291,6 +311,7 @@ function SystemTrendPanel({ data = mergedData }) {
       </div>
 
       {/* ── Chart 1: Annual Replacement Trend ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
         Annual Replacement Trend
       </p>
@@ -298,7 +319,7 @@ function SystemTrendPanel({ data = mergedData }) {
         Lead and GPCL service lines replaced per year (2021–2024)
       </p>
 
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={200}>
         <BarChart data={replacementData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="year" stroke="#64748b" tick={{ fontSize: 12 }} padding={{ right: 20 }} />
@@ -316,12 +337,14 @@ function SystemTrendPanel({ data = mergedData }) {
       <div className={`insight-box ${insightClass}`} style={{ margin: '0.5rem 0 1.5rem' }}>
         <strong>{insightText}</strong>
         {pctChange != null && selectedName && <span> for {selectedName}</span>}
-      </div>
+      </div> {/* end replacement chart section */}
+      </div> {/* end flex:1 wrapper */}
 
       {/* Divider */}
       <div style={{ borderTop: '1px solid #e5e7eb', marginBottom: '1.25rem' }} />
 
       {/* ── Chart 2: Lead Levels Over Time ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
         Lead Levels Over Time
       </p>
@@ -334,7 +357,7 @@ function SystemTrendPanel({ data = mergedData }) {
           No lead monitoring data available for this system.
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={200}>
           <LineChart data={leadData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
@@ -381,6 +404,7 @@ function SystemTrendPanel({ data = mergedData }) {
         </ResponsiveContainer>
       )}
 
+      </div> {/* end lead chart flex:1 wrapper */}
     </div>
   );
 }
