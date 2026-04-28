@@ -333,34 +333,30 @@ function SystemTrendPanel({ data = mergedData }) {
   const maxPpb = Math.max(...leadData.map((d) => d.ppb), ACTION_LEVEL_OLD + 2);
   const yMax   = Math.ceil(maxPpb * 1.15);
 
-  // Replacement insight — describe what's visible in the chart intuitively.
-  // Uses the years that actually have non-zero data rather than assuming
-  // a fixed start year, so the message is always accurate regardless of
-  // which years a system has replacement records.
-  const yearsWithData   = replacementData.filter((d) => d.replacements > 0);
-  const hasAnyData      = yearsWithData.length > 0;
-  const totalReplaced   = replacementData.reduce((sum, d) => sum + d.replacements, 0);
-  const peakYear        = hasAnyData
-    ? replacementData.reduce((best, d) => d.replacements > best.replacements ? d : best)
+  // Replacement insight — show inventory-based fraction and % replaced.
+  // Uses totalReplaced (sum of lines_replaced 2021-2024) and inventoryTotal
+  // (total_to_identify_or_replace from 2025 inventory).
+  // Color: red if below 20% compliance threshold, green if at or above.
+  const totalReplaced = replacementData.reduce((sum, d) => sum + d.replacements, 0);
+  const hasAnyData    = totalReplaced > 0;
+
+  // % replaced uses the same formula as the rest of the dashboard:
+  // replaced / (toReplace + replaced) * 100
+  const pctReplaced = (inventoryTotal != null && (inventoryTotal + totalReplaced) > 0)
+    ? (totalReplaced / (inventoryTotal + totalReplaced)) * 100
     : null;
 
-  // Calculate trend only when there are at least two years with data
-  const firstWithData   = yearsWithData[0];
-  const lastWithData    = yearsWithData[yearsWithData.length - 1];
-  const canTrend        = yearsWithData.length >= 2 && firstWithData.replacements > 0;
-  const pctChange       = canTrend
-    ? Math.round(((lastWithData.replacements - firstWithData.replacements) / firstWithData.replacements) * 100)
-    : null;
+  // Compliance threshold: >=20% is compliant (green), <20% is not (red)
+  const COMPLIANCE_THRESHOLD = 20;
+  const isCompliant   = pctReplaced != null && pctReplaced >= COMPLIANCE_THRESHOLD;
+  const insightClass  = !hasAnyData ? 'yellow' : isCompliant ? 'green' : 'red';
 
+  // Build the insight message
   const insightText = !hasAnyData
-    ? 'No replacement data recorded for this system (2021–2024).'
-    : yearsWithData.length === 1
-      ? `${totalReplaced.toLocaleString()} lines replaced in ${peakYear.year} — the only year with recorded replacements.`
-      : pctChange != null
-        ? `${pctChange > 0 ? '+' : ''}${pctChange}% from ${firstWithData.year} to ${lastWithData.year} · ${totalReplaced.toLocaleString()} total lines replaced`
-        : `${totalReplaced.toLocaleString()} total lines replaced across ${yearsWithData.length} years`;
-
-  const insightClass = hasAnyData ? 'green' : 'yellow';
+    ? `No replacement data recorded for this system (2021–2024).`
+    : inventoryTotal != null && pctReplaced != null
+      ? `${totalReplaced.toLocaleString()} of ${(inventoryTotal + totalReplaced).toLocaleString()} lines replaced — ${pctReplaced.toFixed(1)}%`
+      : `${totalReplaced.toLocaleString()} total lines replaced (2021–2024)`;
 
   return (
     <div className="chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -443,9 +439,8 @@ function SystemTrendPanel({ data = mergedData }) {
       )}
 
       {/* Replacement insight */}
-      <div className={`insight-box ${insightClass}`} style={{ margin: '0.5rem 0 1.5rem' }}>
+      <div className={`insight-box ${insightClass}`} style={{ margin: '0.5rem 0 1.5rem', ...(insightClass === 'red' ? { background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' } : {}) }}>
         <strong>{insightText}</strong>
-        {pctChange != null && selectedName && <span> for {selectedName}</span>}
       </div> {/* end replacement chart section */}
       </div> {/* end flex:1 wrapper */}
 
