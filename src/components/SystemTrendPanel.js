@@ -333,34 +333,8 @@ function SystemTrendPanel({ data = mergedData }) {
   const maxPpb = Math.max(...leadData.map((d) => d.ppb), ACTION_LEVEL_OLD + 2);
   const yMax   = Math.ceil(maxPpb * 1.15);
 
-  // Replacement insight — describe what's visible in the chart intuitively.
-  // Uses the years that actually have non-zero data rather than assuming
-  // a fixed start year, so the message is always accurate regardless of
-  // which years a system has replacement records.
-  const yearsWithData   = replacementData.filter((d) => d.replacements > 0);
-  const hasAnyData      = yearsWithData.length > 0;
-  const totalReplaced   = replacementData.reduce((sum, d) => sum + d.replacements, 0);
-  const peakYear        = hasAnyData
-    ? replacementData.reduce((best, d) => d.replacements > best.replacements ? d : best)
-    : null;
-
-  // Calculate trend only when there are at least two years with data
-  const firstWithData   = yearsWithData[0];
-  const lastWithData    = yearsWithData[yearsWithData.length - 1];
-  const canTrend        = yearsWithData.length >= 2 && firstWithData.replacements > 0;
-  const pctChange       = canTrend
-    ? Math.round(((lastWithData.replacements - firstWithData.replacements) / firstWithData.replacements) * 100)
-    : null;
-
-  const insightText = !hasAnyData
-    ? 'No replacement data recorded for this system (2021–2024).'
-    : yearsWithData.length === 1
-      ? `${totalReplaced.toLocaleString()} lines replaced in ${peakYear.year} — the only year with recorded replacements.`
-      : pctChange != null
-        ? `${pctChange > 0 ? '+' : ''}${pctChange}% from ${firstWithData.year} to ${lastWithData.year} · ${totalReplaced.toLocaleString()} total lines replaced`
-        : `${totalReplaced.toLocaleString()} total lines replaced across ${yearsWithData.length} years`;
-
-  const insightClass = hasAnyData ? 'green' : 'yellow';
+  // totalReplaced still needed for potential future use
+  const totalReplaced = replacementData.reduce((sum, d) => sum + d.replacements, 0); // eslint-disable-line no-unused-vars
 
   return (
     <div className="chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -370,7 +344,7 @@ function SystemTrendPanel({ data = mergedData }) {
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'space-between',
-        marginBottom:   '1.25rem',
+        marginBottom:   '0.75rem',
         flexWrap:       'wrap',
         gap:            '0.5rem',
       }}>
@@ -406,7 +380,7 @@ function SystemTrendPanel({ data = mergedData }) {
         Lead and GPCL service lines replaced per year (2021–2024)
       </p>
 
-      <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={200}>
+      <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={160}>
         <BarChart data={replacementData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="year" stroke="#64748b" tick={{ fontSize: 12 }} padding={{ right: 20 }} />
@@ -443,14 +417,11 @@ function SystemTrendPanel({ data = mergedData }) {
       )}
 
       {/* Replacement insight */}
-      <div className={`insight-box ${insightClass}`} style={{ margin: '0.5rem 0 1.5rem' }}>
-        <strong>{insightText}</strong>
-        {pctChange != null && selectedName && <span> for {selectedName}</span>}
-      </div> {/* end replacement chart section */}
+      {/* insight box removed per client request */}
       </div> {/* end flex:1 wrapper */}
 
       {/* Divider */}
-      <div style={{ borderTop: '1px solid #e5e7eb', marginBottom: '1.25rem' }} />
+      <div style={{ borderTop: '1px solid #e5e7eb', marginBottom: '0.75rem' }} />
 
       {/* ── Chart 2: Lead Levels Over Time ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -466,7 +437,7 @@ function SystemTrendPanel({ data = mergedData }) {
           No lead monitoring data available for this system.
         </div>
       ) : (
-        <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={200}>
+        <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={160}>
           <LineChart data={leadData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
