@@ -4,40 +4,15 @@ import 'leaflet/dist/leaflet.css';
 import waterSystemsData from '../data/waterSystemsData';
 import './LeadLineMap.css';
 
-// Status configuration with colors and descriptions
 const STATUS_CONFIG = {
-  'No lead lines': {
-    color: '#3b82f6',
-    description: 'Inventory completed, no lead lines identified'
-  },
-  'Not compliant': {
-    color: '#dc2626',
-    description: '<20% average replacement, 2021–2024'
-  },
-  'Compliant': {
-    color: '#4ade80',
-    description: '≥20% average replacement, 2021–2024'
-  },
-  'Inventory not received or incomplete': {
-    color: '#9333ea',
-    description: 'No complete inventory filed'
-  },
-  '100% replaced': {
-    color: '#047857',
-    description: 'All lead lines replaced'
-  },
-  'Unknown': {
-    color: '#9ca3af',
-    description: 'Status unknown'
-  }
+  'No lead lines': { color: '#3b82f6', description: 'Inventory completed, no lead lines identified' },
+  'Not compliant': { color: '#dc2626', description: '<20% average replacement, 2021–2024' },
+  'Compliant': { color: '#4ade80', description: '≥20% average replacement, 2021–2024' },
+  'Inventory not received or incomplete': { color: '#9333ea', description: 'No complete inventory filed' },
+  '100% replaced': { color: '#047857', description: 'All lead lines replaced' },
+  'Unknown': { color: '#9ca3af', description: 'Status unknown' }
 };
 
-/**
- * Human-readable display labels for each status value.
- * Matches the original dashboard legend wording.
- * The data uses short keys ('Not compliant', 'Compliant') internally —
- * these labels are shown in the UI only.
- */
 const STATUS_DISPLAY_LABEL = {
   'Not compliant':                        '<20% average replacement, 2021–2024',
   'Compliant':                            '≥20% average replacement, 2021–2024',
@@ -47,11 +22,16 @@ const STATUS_DISPLAY_LABEL = {
   'No service lines; wholesale only':     'No service lines; wholesale only',
 };
 
-/** Returns the display label for a status, falling back to the raw value. */
 const getStatusLabel = (status) => STATUS_DISPLAY_LABEL[status] || status;
 
+// Michigan bounding box — prevents the user from panning outside the state.
+// Coordinates: [SW corner, NE corner]
+const MICHIGAN_BOUNDS = [
+  [41.6, -90.5],  // Southwest — below the Indiana/Ohio border, past Wisconsin
+  [48.4, -82.1],  // Northeast — Upper Peninsula tip, Lake Superior shore
+];
+
 function LeadLineMap() {
-  // Filter states for each status category
   const [filters, setFilters] = useState({
     'Inventory not received or incomplete': true,
     'No lead lines': true,
@@ -60,32 +40,27 @@ function LeadLineMap() {
     'Not compliant': true
   });
 
-  // Filter systems with coordinates (excluding wholesale-only systems)
   const systemsWithCoords = waterSystemsData.filter(
     system => system.latitude && system.longitude &&
               system.status !== 'No service lines; wholesale only'
   );
 
-  // Count systems by status
   const statusCounts = {};
   systemsWithCoords.forEach(system => {
     const status = system.status || 'Unknown';
     statusCounts[status] = (statusCounts[status] || 0) + 1;
   });
 
-  // Filter systems based on selected statuses
   const filteredSystems = systemsWithCoords.filter(system => {
     const status = system.status || 'Unknown';
     return filters[status] !== false;
   });
 
-  // Get marker color based on status
   const getMarkerColor = (system) => {
     const status = system.status || 'Unknown';
     return STATUS_CONFIG[status]?.color || STATUS_CONFIG['Unknown'].color;
   };
 
-  // Calculate marker radius based on total lines to replace
   const getMarkerRadius = (system) => {
     if (system.status === 'Inventory not received or incomplete') return 6;
     if (system.totalToReplace === 0) return 5;
@@ -93,15 +68,10 @@ function LeadLineMap() {
     return Math.max(baseRadius, 4);
   };
 
-  // Toggle filter for a status
   const toggleFilter = (status) => {
-    setFilters(prev => ({
-      ...prev,
-      [status]: !prev[status]
-    }));
+    setFilters(prev => ({ ...prev, [status]: !prev[status] }));
   };
 
-  // Check if this is the City of Flint
   const isFlint = (system) => {
     const nameUpper = system.name.toUpperCase();
     return nameUpper.includes('FLINT, CITY OF') ||
@@ -110,7 +80,6 @@ function LeadLineMap() {
            system.pwsid === 'MI0002520';
   };
 
-  // Order of statuses for display (most concerning first)
   const statusOrder = [
     'Inventory not received or incomplete',
     'Not compliant',
@@ -126,7 +95,6 @@ function LeadLineMap() {
         Showing {filteredSystems.length.toLocaleString()} of {systemsWithCoords.length.toLocaleString()} water systems with location data
       </p>
 
-      {/* Filter Controls */}
       <div className="map-controls">
         <p className="filter-instructions">Click to show or hide status categories:</p>
         {statusOrder.map(status => (
@@ -136,21 +104,19 @@ function LeadLineMap() {
               checked={filters[status]}
               onChange={() => toggleFilter(status)}
             />
-            <span
-              className="status-label"
-              style={{ color: STATUS_CONFIG[status].color }}
-            >
-              {/* Use display label so checkboxes match legend and other pages */}
+            <span className="status-label" style={{ color: STATUS_CONFIG[status].color }}>
               ● {getStatusLabel(status)} ({statusCounts[status] || 0})
             </span>
           </label>
         ))}
       </div>
 
-      {/* Map */}
       <MapContainer
         center={[44.3148, -85.6024]}
         zoom={7}
+        minZoom={6}
+        maxBounds={MICHIGAN_BOUNDS}
+        maxBoundsViscosity={1.0}
         style={{ height: '600px', width: '100%' }}
         scrollWheelZoom={true}
       >
@@ -203,7 +169,6 @@ function LeadLineMap() {
                   <p>
                     <strong>Status:</strong>{' '}
                     <span style={{ color: getMarkerColor(system), fontWeight: 'bold' }}>
-                      {/* Use display label in popup to match other pages */}
                       {getStatusLabel(system.status)}
                     </span>
                   </p>
@@ -218,7 +183,6 @@ function LeadLineMap() {
         ))}
       </MapContainer>
 
-      {/* Legend */}
       <div className="map-legend">
         <h4>Legend</h4>
         <table className="legend-table">
@@ -234,12 +198,8 @@ function LeadLineMap() {
             {statusOrder.map(status => (
               <tr key={status}>
                 <td>
-                  <span
-                    className="legend-circle"
-                    style={{ backgroundColor: STATUS_CONFIG[status].color }}
-                  />
+                  <span className="legend-circle" style={{ backgroundColor: STATUS_CONFIG[status].color }} />
                 </td>
-                {/* Display label in legend — matches filter checkboxes and other pages */}
                 <td className="legend-status">{getStatusLabel(status)}</td>
                 <td className="legend-count">{statusCounts[status] || 0}</td>
                 <td className="legend-description">{STATUS_CONFIG[status].description}</td>
@@ -247,9 +207,7 @@ function LeadLineMap() {
             ))}
           </tbody>
         </table>
-        <p className="legend-note">
-          <em>Circle size = Total lines to be identified or replaced</em>
-        </p>
+        <p className="legend-note"><em>Circle size = Total lines to be identified or replaced</em></p>
 
         <div className="progress-explanation">
           <h4>Understanding "Progress"</h4>
@@ -262,7 +220,6 @@ function LeadLineMap() {
         </div>
       </div>
 
-      {/* Info Box */}
       <div className="map-info">
         <p>
           <strong>Note:</strong> This map shows {systemsWithCoords.length.toLocaleString()} water systems

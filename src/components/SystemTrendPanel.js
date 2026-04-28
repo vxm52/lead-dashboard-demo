@@ -44,12 +44,44 @@ import mergedData from '../data/mergedData';
 /** Years covered by LSLR replacement data. Update when new years are added. */
 const LSLR_YEARS = [2021, 2022, 2023, 2024];
 
-/** Michigan's current lead action level (ppb). A result > 12 ppb is an exceedance. */
-const ACTION_LEVEL_PPB = 12;
+/**
+ * Lead action level thresholds:
+ *   ACTION_LEVEL_NEW — 12 ppb, effective 2025 onwards (current standard)
+ *   ACTION_LEVEL_OLD — 15 ppb, effective before 2025 (pre-2025 standard)
+ *
+ * Dot color rules:
+ *   Year < 2025:  ppb > 15 → red,  12 < ppb ≤ 15 → orange,  ppb ≤ 12 → blue
+ *   Year >= 2025: ppb > 12 → red,  ppb ≤ 12 → blue
+ */
+const ACTION_LEVEL_NEW = 12;  // current 2025 standard
+const ACTION_LEVEL_OLD = 15;  // pre-2025 standard
+const TRANSITION_YEAR  = 2025; // year the new standard took effect
 
-const COLOR_ACTION_LEVEL = '#dc2626'; // red — action level reference line and dots
-const COLOR_BAR          = '#3b82f6'; // blue — replacement bars
-const COLOR_LINE         = '#3b82f6'; // blue — lead level line
+const COLOR_RED    = '#dc2626'; // red — exceeds applicable action level
+const COLOR_ORANGE = '#f97316'; // orange — between 12–15 ppb before 2025
+const COLOR_BLUE   = '#3b82f6'; // blue — below action level
+const COLOR_BAR    = '#3b82f6'; // blue — replacement bars
+const COLOR_LINE   = '#3b82f6'; // blue — lead level line
+
+/**
+ * Returns the dot color for a given ppb reading and year.
+ * Encodes the year-aware exceedance rules in one place so both
+ * LeadDot and LeadTooltip use identical logic.
+ *
+ * @param {number} ppb
+ * @param {number} year
+ * @returns {string} hex color
+ */
+function getDotColor(ppb, year) {
+  if (ppb == null) return COLOR_BLUE;
+  if (year >= TRANSITION_YEAR) {
+    return ppb > ACTION_LEVEL_NEW ? COLOR_RED : COLOR_BLUE;
+  }
+  // Before 2025: use the old 15 ppb threshold
+  if (ppb > ACTION_LEVEL_OLD) return COLOR_RED;
+  if (ppb > ACTION_LEVEL_NEW) return COLOR_ORANGE;
+  return COLOR_BLUE;
+}
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -141,7 +173,8 @@ function getLeadSeries(data, basePwsid) {
   return Object.values(worstByYear)
     .sort((a, b) => a.year - b.year)
     .map((row) => ({
-      year:             String(row.year),
+      year:             String(row.year),  // string for XAxis label
+      yearNum:          row.year,          // number for year-aware color logic
       ppb:              row.lead_90th_ppb,
       aboveActionLevel: row.above_action_level,
     }));
@@ -183,15 +216,26 @@ function ReplacementTooltip({ active, payload, label }) {
 
 function LeadTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
-  const ppb      = payload[0]?.value;
-  const isAbove  = ppb != null && ppb > ACTION_LEVEL_PPB;
+  const ppb  = payload[0]?.value;
+  const year = payload[0]?.payload?.yearNum; // numeric year for threshold logic
+  const dotColor = getDotColor(ppb, year);
+  const threshold = year >= TRANSITION_YEAR ? ACTION_LEVEL_NEW : ACTION_LEVEL_OLD;
+  const isAbove = ppb != null && ppb > threshold;
+
   return (
-    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '10px 14px', fontSize: '0.85rem', minWidth: '160px' }}>
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '10px 14px', fontSize: '0.85rem', minWidth: '180px' }}>
       <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#1f2937' }}>{label}</p>
       {ppb != null ? (
-        <p style={{ margin: 0, color: isAbove ? COLOR_ACTION_LEVEL : COLOR_LINE }}>
-          {ppb.toFixed(1)} ppb (90th percentile)
-        </p>
+        <>
+          <p style={{ margin: '0 0 2px', color: dotColor }}>
+            {ppb.toFixed(1)} ppb (90th percentile)
+          </p>
+          {isAbove && (
+            <p style={{ margin: 0, fontSize: '0.75rem', color: dotColor, fontWeight: 600 }}>
+              ⚠ Above {threshold} ppb action level
+            </p>
+          )}
+        </>
       ) : (
         <p style={{ margin: 0, color: '#9ca3af' }}>No data this year</p>
       )}
@@ -204,17 +248,19 @@ function LeadTooltip({ active, payload, label }) {
 // =============================================================================
 
 /**
- * Red, slightly larger dot for years where lead > 12 ppb.
- * Blue dot otherwise. Makes exceedances visible without requiring a hover.
+ * Year-aware colored dot for the lead levels chart.
+ * Color logic matches getDotColor() — see constants section for rules.
+ * Size: red/orange (exceedance) dots are slightly larger for visibility.
  */
 function LeadDot({ cx, cy, payload }) {
   if (payload.ppb == null) return null;
-  const isAbove = payload.ppb > ACTION_LEVEL_PPB;
+  const color   = getDotColor(payload.ppb, payload.yearNum);
+  const isAbove = color !== COLOR_BLUE;
   return (
     <circle
       cx={cx} cy={cy}
       r={isAbove ? 8 : 6}
-      fill={isAbove ? COLOR_ACTION_LEVEL : COLOR_LINE}
+      fill={color}
       stroke="#fff"
       strokeWidth={2}
     />
@@ -284,7 +330,7 @@ function SystemTrendPanel({ data = mergedData }) {
   );
 
   // Y-axis upper bound for lead chart — always shows the 12 ppb line
-  const maxPpb = Math.max(...leadData.map((d) => d.ppb), ACTION_LEVEL_PPB + 2);
+  const maxPpb = Math.max(...leadData.map((d) => d.ppb), ACTION_LEVEL_OLD + 2);
   const yMax   = Math.ceil(maxPpb * 1.15);
 
   // Replacement insight — describe what's visible in the chart intuitively.
@@ -412,7 +458,7 @@ function SystemTrendPanel({ data = mergedData }) {
         Lead Levels Over Time
       </p>
       <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: '#9ca3af' }}>
-        90th percentile lead concentration (ppb) — red dots exceed Michigan's {ACTION_LEVEL_PPB} ppb action level
+        90th percentile lead concentration (ppb) — red dots exceed the applicable action level (15 ppb before 2025, 12 ppb from 2025)
       </p>
 
       {leadData.length === 0 ? (
@@ -440,16 +486,32 @@ function SystemTrendPanel({ data = mergedData }) {
               width={56}
             />
             <Tooltip content={<LeadTooltip />} />
+            {/* 15 ppb — pre-2025 standard (orange) */}
             <ReferenceLine
-              y={ACTION_LEVEL_PPB}
-              stroke={COLOR_ACTION_LEVEL}
+              y={ACTION_LEVEL_OLD}
+              stroke={COLOR_ORANGE}
               strokeDasharray="5 4"
               strokeWidth={1.5}
               label={{
-                value:      `${ACTION_LEVEL_PPB} ppb action level`,
+                value:      `${ACTION_LEVEL_OLD} ppb (before 2025)`,
                 position:   'insideBottomLeft',
                 fontSize:   10,
-                fill:       COLOR_ACTION_LEVEL,
+                fill:       COLOR_ORANGE,
+                fontWeight: 600,
+                dy:         -5,
+              }}
+            />
+            {/* 12 ppb — current 2025 standard (red) */}
+            <ReferenceLine
+              y={ACTION_LEVEL_NEW}
+              stroke={COLOR_RED}
+              strokeDasharray="5 4"
+              strokeWidth={1.5}
+              label={{
+                value:      `${ACTION_LEVEL_NEW} ppb (from 2025)`,
+                position:   'insideBottomLeft',
+                fontSize:   10,
+                fill:       COLOR_RED,
                 fontWeight: 600,
                 dy:         -5,
               }}
