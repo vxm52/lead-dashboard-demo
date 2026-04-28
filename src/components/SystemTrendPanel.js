@@ -333,30 +333,8 @@ function SystemTrendPanel({ data = mergedData }) {
   const maxPpb = Math.max(...leadData.map((d) => d.ppb), ACTION_LEVEL_OLD + 2);
   const yMax   = Math.ceil(maxPpb * 1.15);
 
-  // Replacement insight — show inventory-based fraction and % replaced.
-  // Uses totalReplaced (sum of lines_replaced 2021-2024) and inventoryTotal
-  // (total_to_identify_or_replace from 2025 inventory).
-  // Color: red if below 20% compliance threshold, green if at or above.
-  const totalReplaced = replacementData.reduce((sum, d) => sum + d.replacements, 0);
-  const hasAnyData    = totalReplaced > 0;
-
-  // % replaced uses the same formula as the rest of the dashboard:
-  // replaced / (toReplace + replaced) * 100
-  const pctReplaced = (inventoryTotal != null && (inventoryTotal + totalReplaced) > 0)
-    ? (totalReplaced / (inventoryTotal + totalReplaced)) * 100
-    : null;
-
-  // Compliance threshold: >=20% is compliant (green), <20% is not (red)
-  const COMPLIANCE_THRESHOLD = 20;
-  const isCompliant   = pctReplaced != null && pctReplaced >= COMPLIANCE_THRESHOLD;
-  const insightClass  = !hasAnyData ? 'yellow' : isCompliant ? 'green' : 'red';
-
-  // Build the insight message
-  const insightText = !hasAnyData
-    ? `No replacement data recorded for this system (2021–2024).`
-    : inventoryTotal != null && pctReplaced != null
-      ? `${totalReplaced.toLocaleString()} of ${(inventoryTotal + totalReplaced).toLocaleString()} lines replaced — ${pctReplaced.toFixed(1)}%`
-      : `${totalReplaced.toLocaleString()} total lines replaced (2021–2024)`;
+  // totalReplaced still needed for potential future use
+  const totalReplaced = replacementData.reduce((sum, d) => sum + d.replacements, 0); // eslint-disable-line no-unused-vars
 
   return (
     <div className="chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -366,7 +344,7 @@ function SystemTrendPanel({ data = mergedData }) {
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'space-between',
-        marginBottom:   '1.25rem',
+        marginBottom:   '0.75rem',
         flexWrap:       'wrap',
         gap:            '0.5rem',
       }}>
@@ -402,7 +380,7 @@ function SystemTrendPanel({ data = mergedData }) {
         Lead and GPCL service lines replaced per year (2021–2024)
       </p>
 
-      <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={200}>
+      <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={160}>
         <BarChart data={replacementData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="year" stroke="#64748b" tick={{ fontSize: 12 }} padding={{ right: 20 }} />
@@ -439,13 +417,11 @@ function SystemTrendPanel({ data = mergedData }) {
       )}
 
       {/* Replacement insight */}
-      <div className={`insight-box ${insightClass}`} style={{ margin: '0.5rem 0 1.5rem', ...(insightClass === 'red' ? { background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' } : {}) }}>
-        <strong>{insightText}</strong>
-      </div> {/* end replacement chart section */}
+      {/* insight box removed per client request */}
       </div> {/* end flex:1 wrapper */}
 
       {/* Divider */}
-      <div style={{ borderTop: '1px solid #e5e7eb', marginBottom: '1.25rem' }} />
+      <div style={{ borderTop: '1px solid #e5e7eb', marginBottom: '0.75rem' }} />
 
       {/* ── Chart 2: Lead Levels Over Time ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -461,7 +437,7 @@ function SystemTrendPanel({ data = mergedData }) {
           No lead monitoring data available for this system.
         </div>
       ) : (
-        <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={200}>
+        <ResponsiveContainer width="100%" style={{ flex: 1 }} height="100%" minHeight={160}>
           <LineChart data={leadData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
