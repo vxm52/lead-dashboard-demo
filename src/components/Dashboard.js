@@ -81,9 +81,12 @@ function Dashboard() {
         
         <div className="charts-grid">
           {/* Combined system trend panel — one dropdown controls both
-              Annual Replacement Trend and Lead Levels Over Time charts */}
+              Annual Replacement Trend and Lead Levels Over Time charts.
+              Spans the full left column height. */}
           <SystemTrendPanel />
-          
+
+          {/* Right column: composition pie chart + compliance breakdown stacked */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', minWidth: 0 }}>
           <div className="chart-card">
             <h3>Service Line Composition</h3>
             <ResponsiveContainer width="100%" height={250}>
@@ -122,9 +125,10 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* Compliance status breakdown — driven by waterSystemsData */}
+          {/* Compliance status breakdown — stacked below composition in right column */}
           <ComplianceStatusChart />
-        </div>
+          </div> {/* end right column wrapper */}
+        </div> {/* end charts-grid */}
         
         <div className="footer">
           <p>Data source: Michigan EGLE Community Drinking Supply Monitoring Inventory (CDSMI) and Lead Service Line Replacement Reports</p>
