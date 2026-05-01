@@ -1,19 +1,21 @@
 {
   "socrata_api": {
     "success": true,
-    "record_count": 1399,
-    "content_hash": "cee02265a9b389e676afa3f29ad629d6",
+    "record_count": 1386,
+    "content_hash": "3977ae6f4435224fbbcd58745c2b4eaa",
     "url": "https://data.michigan.gov/dataset/Public-Water-Supply-90th-Percentiles/39ya-9txc"
   },
   "dsmi_page": {
-    "success": false,
-    "error": "403 Client Error: Forbidden for url: https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule/dsmi-inventories",
-    "url": "https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule/dsmi-inventories"
+    "success": true,
+    "content_hash": "f83777b13bff63709f3f69f2c9c4caf8",
+    "data_links_count": 1,
+    "url": "https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule/dsmi/dsmi-inventories"
   },
   "lcr_page": {
-    "success": false,
-    "error": "403 Client Error: Forbidden for url: https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule",
+    "success": true,
+    "content_hash": "95513138a5680e4a508f9d8affe87980",
+    "data_links_count": 0,
     "url": "https://www.michigan.gov/egle/about/organization/drinking-water-and-environmental-health/community-water-supply/lead-and-copper-rule"
   },
-  "last_check": "2026-02-02T14:33:28.989890"
+  "last_check": "2026-05-01T14:45:00.502189"
 }
