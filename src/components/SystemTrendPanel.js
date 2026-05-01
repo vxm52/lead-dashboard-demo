@@ -307,6 +307,7 @@ function SystemTrendPanel({ data = mergedData }) {
     () => allSystems[0]?.base_pwsid ?? null
   );
 
+  // eslint-disable-next-line no-unused-vars
   const selectedName = allSystems.find(
     (s) => s.base_pwsid === selectedPwsid
   )?.display_name ?? '';
